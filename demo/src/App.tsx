@@ -6,11 +6,7 @@ import SolmuGraph from "./SolmuGraph";
 function App() {
   const [count, setCount] = useState(0);
 
-  return (
-    <div className="App">
-      <SolmuGraph />
-    </div>
-  );
+  return <SolmuGraph />;
 }
 
 export default App;

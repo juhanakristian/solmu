@@ -99,8 +99,9 @@ function useSolmu({ data, renderers, onNodeMove }: useFlowParams) {
 
         return (
           <path
-            d={`M${x1},${y1} L${x2},${y2}`}
-            stroke="black"
+            d={`M${x1},${y1} C ${x1 + 50},${y1} ${x2 - 50},${y2} ${x2},${y2}`}
+            fill="none"
+            stroke="#eee"
             strokeWidth={2}
           />
         );
@@ -132,11 +133,12 @@ function useSolmu({ data, renderers, onNodeMove }: useFlowParams) {
               key={connector.id}
               x={connector.x - 5}
               y={connector.y - 5}
-              stroke="#eee"
-              width={12}
+              rx={3}
+              ry={3}
+              width={10}
               height={10}
               r={5}
-              fill="#cecece"
+              fill="#dedede"
             />
           );
         });
@@ -149,11 +151,10 @@ function Box(props: any) {
   return (
     <rect
       fill="#efefef"
-      stroke="#bbb"
+      stroke="#dedede"
       rx={10}
       ry={10}
-      strokeWidth={1}
-      strokeDasharray="5,5"
+      strokeWidth={2}
       width={150}
       height={50}
     />
@@ -176,7 +177,7 @@ export default function App() {
           },
           {
             id: "node1-output-2",
-            x: 148,
+            x: 150,
             y: 25,
           },
         ],
@@ -237,22 +238,24 @@ export default function App() {
   });
 
   return (
-    <div className="App">
+    <div style={{ width: "100%", height: "100%", padding: 50 }}>
       <svg
         {...containerProps}
-        style={{ background: "white", width: 500, height: 500 }}
+        style={{ background: "white", width: "100%", height: "100%" }}
       >
+        {edges.map((edge) => (
+          <g transform="translate(10,10)">{edge.render()}</g>
+        ))}
         {nodes.map((node) => {
           return (
-            <svg key={node.id} {...node.getNodeProps()} width={150}>
-              {node.render(node.getNodeProps())}
-              {node.renderConnectors()}
+            <svg key={node.id} {...node.getNodeProps()}>
+              <g transform="translate(10, 10)">
+                {node.render(node.getNodeProps())}
+                {node.renderConnectors()}
+              </g>
             </svg>
           );
         })}
-        {edges.map((edge) => (
-          <g>{edge.render()}</g>
-        ))}
       </svg>
     </div>
   );
