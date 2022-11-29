@@ -1,4 +1,5 @@
 import React from "react";
+import { UseSolmuParams } from "./types";
 
 export function useSolmu({ data, renderers, onNodeMove }: UseSolmuParams) {
   const [dragItem, setDragItem] = React.useState<string | null>(null);

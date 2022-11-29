@@ -1,10 +1,10 @@
-type Connector = {
+export type Connector = {
   id: string;
   x: number;
   y: number;
 };
 
-type SolmuNode = {
+export type SolmuNode = {
   id: string;
   x: number;
   y: number;
@@ -12,22 +12,22 @@ type SolmuNode = {
   connectors?: Connector[];
 };
 
-type EdgeNode = {
+export type EdgeNode = {
   node: string;
   connector: string;
 };
 
-type Edge = {
+export type Edge = {
   source: EdgeNode;
   target: EdgeNode;
 };
 
-type Renderer = {
+export type Renderer = {
   type: string;
   render: any;
 };
 
-type UseSolmuParams = {
+export type UseSolmuParams = {
   data: {
     nodes: SolmuNode[];
     edges: Edge[];
@@ -36,4 +36,4 @@ type UseSolmuParams = {
   onNodeMove?: NodeMoveFunc;
 };
 
-type NodeMoveFunc = (node: string, x: number, y: number) => void;
+export type NodeMoveFunc = (node: string, x: number, y: number) => void;
