@@ -6,9 +6,9 @@ API based on the [inversion of control]() pattern also used by [Tanstack Table](
 
 ## TODO
 
-- [ ] Separate code from demo
+- [x] Separate code from demo
 - [ ] Improve API for connectors
 - [ ] Finish basic rendering
 - [ ] Basic bezier edge routing
-- [ ] Remove hardcoding around offsets etc.
+- [x] Remove hardcoding around offsets etc.
 - [ ] Define APIs for event handlers

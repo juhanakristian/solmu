@@ -4,6 +4,7 @@ import { useSolmu } from "solmu";
 function Box(props: any) {
   return (
     <rect
+      {...props}
       fill="#efefef"
       stroke="#dedede"
       rx={10}
@@ -98,16 +99,14 @@ export default function App() {
         style={{ background: "white", width: "100%", height: "100%" }}
       >
         {edges.map((edge) => (
-          <g transform="translate(10,10)">{edge.render()}</g>
+          <>{edge.render()}</>
         ))}
         {nodes.map((node) => {
           return (
-            <svg key={node.id} {...node.getNodeProps()}>
-              <g transform="translate(10, 10)">
-                {node.render(node.getNodeProps())}
-                {node.renderConnectors()}
-              </g>
-            </svg>
+            <g key={node.id} {...node.getGroupProps()}>
+              {node.render(node.getNodeProps())}
+              {node.renderConnectors()}
+            </g>
           );
         })}
       </svg>

@@ -40,6 +40,7 @@ export function useSolmu({ data, renderers, onNodeMove }: UseSolmuParams) {
     },
     edges: data.edges.map((edge) => ({
       ...edge,
+
       render: (props?: any) => {
         const source = data.nodes.find((n) => n.id === edge.source.node);
         const target = data.nodes.find((n) => n.id === edge.target.node);
@@ -73,11 +74,13 @@ export function useSolmu({ data, renderers, onNodeMove }: UseSolmuParams) {
       getNodeProps: () => {
         return {
           id: node.id,
-          x: node.x,
-          y: node.y,
           onMouseDown: (e: any) => onMouseDown(e, node.id),
           onMouseUp,
-          connectors: node.connectors,
+        };
+      },
+      getGroupProps: () => {
+        return {
+          transform: `translate(${node.x}, ${node.y})`,
         };
       },
       render: (props: any) => {
