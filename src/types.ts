@@ -1,3 +1,7 @@
+export type SolmuNodeConnector = {
+  id: string;
+  node: string;
+};
 export type Connector = {
   id: string;
   x: number;

@@ -1,5 +1,5 @@
 import React from "react";
-import { UseSolmuParams } from "./types";
+import { SolmuNodeConnector, UseSolmuParams } from "./types";
 
 export function useSolmu({ data, renderers, onNodeMove }: UseSolmuParams) {
   const [dragItem, setDragItem] = React.useState<string | null>(null);
@@ -7,6 +7,11 @@ export function useSolmu({ data, renderers, onNodeMove }: UseSolmuParams) {
     x: 0,
     y: 0,
   });
+
+  const [dragConnector, setDragConnector] =
+    React.useState<null | SolmuNodeConnector>(null);
+  const [hoverConnector, setHoverConnector] =
+    React.useState<null | SolmuNodeConnector>(null);
 
   function onMouseDown(event: React.MouseEvent, id: string) {
     setDragItem(id);
@@ -18,6 +23,13 @@ export function useSolmu({ data, renderers, onNodeMove }: UseSolmuParams) {
 
   function onMouseUp(event: React.MouseEvent) {
     if (dragItem) setDragItem(null);
+    if (dragConnector) {
+      if (hoverConnector) {
+        console.log("CONNECT");
+      }
+
+      setDragConnector(null);
+    }
   }
 
   function onMouseMove(event: React.MouseEvent) {
@@ -31,6 +43,15 @@ export function useSolmu({ data, renderers, onNodeMove }: UseSolmuParams) {
       onNodeMove(dragItem, node.x + nx, node.y + ny);
       setDragOffset({ x: event.clientX, y: event.clientY });
     }
+
+    if (dragConnector) {
+      // Render drag line
+    }
+  }
+
+  function onConnectorClick(connector: string, node: string) {
+    console.log(connector);
+    setDragConnector({ id: connector, node });
   }
 
   return {
@@ -93,6 +114,11 @@ export function useSolmu({ data, renderers, onNodeMove }: UseSolmuParams) {
         return node.connectors?.map((connector) => {
           return (
             <rect
+              onClick={() => onConnectorClick(connector.id, node.id)}
+              onMouseOver={() =>
+                setHoverConnector({ id: connector.id, node: node.id })
+              }
+              onMouseOut={() => setHoverConnector(null)}
               key={connector.id}
               x={connector.x - 5}
               y={connector.y - 5}
