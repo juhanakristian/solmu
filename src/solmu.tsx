@@ -61,8 +61,7 @@ export function useSolmu({ data, renderers, onNodeMove }: UseSolmuParams) {
     },
     edges: data.edges.map((edge) => ({
       ...edge,
-
-      render: (props?: any) => {
+      getEdgeProps: () => {
         const source = data.nodes.find((n) => n.id === edge.source.node);
         const target = data.nodes.find((n) => n.id === edge.target.node);
         if (!source || !target) return null;
@@ -80,14 +79,15 @@ export function useSolmu({ data, renderers, onNodeMove }: UseSolmuParams) {
         const x2 = target.x + tc.x;
         const y2 = target.y + tc.y;
 
-        return (
-          <path
-            d={`M${x1},${y1} C ${x1 + 50},${y1} ${x2 - 50},${y2} ${x2},${y2}`}
-            fill="none"
-            stroke="#eee"
-            strokeWidth={2}
-          />
-        );
+        if (edge.type === "bezier") {
+          return {
+            d: `M${x1},${y1} C ${x1 + 50},${y1} ${x2 - 50},${y2} ${x2},${y2}`,
+          };
+        }
+
+        return {
+          d: `M${x1},${y1} L ${x2},${y2}`,
+        };
       },
     })),
     nodes: data.nodes.map((node) => ({

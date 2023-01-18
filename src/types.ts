@@ -24,6 +24,7 @@ export type EdgeNode = {
 export type Edge = {
   source: EdgeNode;
   target: EdgeNode;
+  type: "bezier" | "line";
 };
 
 export type Renderer = {

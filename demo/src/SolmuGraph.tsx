@@ -1,5 +1,6 @@
 import React from "react";
 import { useSolmu } from "solmu";
+import { Edge } from "../../dist/cjs/types";
 
 function Box(props: any) {
   return (
@@ -61,8 +62,8 @@ export default function App() {
           node: "node2",
           connector: "node2-input-1",
         },
-        type: "line",
-      },
+        type: "bezier",
+      } as Edge,
     ],
   });
 
@@ -99,7 +100,12 @@ export default function App() {
         style={{ background: "white", width: "100%", height: "100%" }}
       >
         {edges.map((edge) => (
-          <>{edge.render()}</>
+          <path
+            fill="none"
+            stroke="black"
+            strokeWidth={2}
+            {...edge.getEdgeProps()}
+          />
         ))}
         {nodes.map((node) => {
           return (
