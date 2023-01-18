@@ -42,7 +42,6 @@ export default function App() {
         id: "node1",
         x: 100,
         y: 100,
-        type: "box",
         Node: Box,
         connectors: [
           {
@@ -61,7 +60,6 @@ export default function App() {
         id: "node2",
         x: 200,
         y: 200,
-        type: "box",
         Node: Box,
         connectors: [
           {
@@ -75,7 +73,6 @@ export default function App() {
         id: "node3",
         x: 200,
         y: 200,
-        type: "diamond",
         Node: Diamond,
         connectors: [
           {

@@ -12,7 +12,6 @@ export type SolmuNode = {
   id: string;
   x: number;
   y: number;
-  type: string;
   connectors?: Connector[];
   Node: any;
 };
@@ -26,11 +25,6 @@ export type Edge = {
   source: EdgeNode;
   target: EdgeNode;
   type: "bezier" | "line";
-};
-
-export type Renderer = {
-  type: string;
-  render: any;
 };
 
 export type UseSolmuParams = {
