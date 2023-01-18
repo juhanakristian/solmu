@@ -14,6 +14,7 @@ export type SolmuNode = {
   y: number;
   type: string;
   connectors?: Connector[];
+  Node: any;
 };
 
 export type EdgeNode = {
@@ -37,7 +38,6 @@ export type UseSolmuParams = {
     nodes: SolmuNode[];
     edges: Edge[];
   };
-  renderers: Renderer[];
   onNodeMove?: NodeMoveFunc;
 };
 

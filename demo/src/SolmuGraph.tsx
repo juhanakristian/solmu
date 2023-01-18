@@ -17,6 +17,24 @@ function Box(props: any) {
   );
 }
 
+function Diamond(props: any) {
+  return (
+    <rect
+      {...props}
+      transform="rotate(45) translate(-50, -50)"
+      fill="#efefef"
+      stroke="#dedede"
+      rx={3}
+      ry={3}
+      strokeWidth={2}
+      width={100}
+      height={100}
+    >
+      <title>Test</title>
+    </rect>
+  );
+}
+
 export default function App() {
   const [data, setData] = React.useState({
     nodes: [
@@ -25,6 +43,7 @@ export default function App() {
         x: 100,
         y: 100,
         type: "box",
+        Node: Box,
         connectors: [
           {
             id: "node1-input-1",
@@ -43,6 +62,7 @@ export default function App() {
         x: 200,
         y: 200,
         type: "box",
+        Node: Box,
         connectors: [
           {
             id: "node2-input-1",
@@ -51,12 +71,31 @@ export default function App() {
           },
         ],
       },
+      {
+        id: "node3",
+        x: 200,
+        y: 200,
+        type: "diamond",
+        Node: Diamond,
+        connectors: [
+          {
+            id: "node3-input-1",
+            x: -70,
+            y: 0,
+          },
+          {
+            id: "node3-input-2",
+            x: 70,
+            y: 0,
+          },
+        ],
+      },
     ],
     edges: [
       {
         source: {
           node: "node1",
-          connector: "node1-output-2",
+          connector: "node1-input-1",
         },
         target: {
           node: "node2",
@@ -64,10 +103,19 @@ export default function App() {
         },
         type: "bezier",
       } as Edge,
+      {
+        source: {
+          node: "node1",
+          connector: "node1-output-2",
+        },
+        target: {
+          node: "node3",
+          connector: "node3-input-1",
+        },
+        type: "bezier",
+      } as Edge,
     ],
   });
-
-  const renderers = [{ type: "box", render: Box }];
 
   function onNodeMove(node: string, x: number, y: number) {
     setData((data) => {
@@ -89,7 +137,6 @@ export default function App() {
 
   const { containerProps, nodes, edges } = useSolmu({
     data,
-    renderers,
     onNodeMove,
   });
 
@@ -101,8 +148,9 @@ export default function App() {
       >
         {edges.map((edge) => (
           <path
+            key={`${edge.source.node}-${edge.target.node}`}
             fill="none"
-            stroke="black"
+            stroke="#efefef"
             strokeWidth={2}
             {...edge.getEdgeProps()}
           />

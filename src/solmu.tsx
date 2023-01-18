@@ -1,7 +1,7 @@
 import React from "react";
 import { SolmuNodeConnector, UseSolmuParams } from "./types";
 
-export function useSolmu({ data, renderers, onNodeMove }: UseSolmuParams) {
+export function useSolmu({ data, onNodeMove }: UseSolmuParams) {
   const [dragItem, setDragItem] = React.useState<string | null>(null);
   const [dragOffset, setDragOffset] = React.useState<{ x: number; y: number }>({
     x: 0,
@@ -105,10 +105,8 @@ export function useSolmu({ data, renderers, onNodeMove }: UseSolmuParams) {
         };
       },
       render: (props: any) => {
-        const { render: Component } = renderers.find(
-          (r) => r.type === node.type
-        ) as any;
-        return <Component {...props} />;
+        const { Node } = node;
+        return <Node {...props} />;
       },
       renderConnectors: (config?: any) => {
         return node.connectors?.map((connector) => {
