@@ -1,3 +1,5 @@
+import React from "react";
+
 export type SolmuNodeConnector = {
   id: string;
   node: string;
@@ -13,7 +15,7 @@ export type SolmuNode = {
   x: number;
   y: number;
   connectors?: Connector[];
-  Node: any;
+  type: string;
 };
 
 export type EdgeNode = {
@@ -27,10 +29,18 @@ export type Edge = {
   type: "bezier" | "line";
 };
 
+export type NodeRenderer = {
+  type: string;
+  component: React.FC;
+};
+
 export type UseSolmuParams = {
   data: {
     nodes: SolmuNode[];
     edges: Edge[];
+  };
+  config: {
+    renderers: NodeRenderer[];
   };
   onNodeMove?: NodeMoveFunc;
 };

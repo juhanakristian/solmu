@@ -42,7 +42,7 @@ export default function App() {
         id: "node1",
         x: 100,
         y: 100,
-        Node: Box,
+        type: "box",
         connectors: [
           {
             id: "node1-input-1",
@@ -60,7 +60,7 @@ export default function App() {
         id: "node2",
         x: 200,
         y: 200,
-        Node: Box,
+        type: "box",
         connectors: [
           {
             id: "node2-input-1",
@@ -73,7 +73,7 @@ export default function App() {
         id: "node3",
         x: 200,
         y: 200,
-        Node: Diamond,
+        type: "diamond",
         connectors: [
           {
             id: "node3-input-1",
@@ -132,8 +132,22 @@ export default function App() {
     });
   }
 
+  const config = {
+    renderers: [
+      {
+        type: "box",
+        component: Box,
+      },
+      {
+        type: "diamond",
+        component: Diamond,
+      },
+    ],
+  };
+
   const { containerProps, nodes, edges } = useSolmu({
     data,
+    config,
     onNodeMove,
   });
 

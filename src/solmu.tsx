@@ -1,7 +1,7 @@
 import React from "react";
 import { SolmuNodeConnector, UseSolmuParams } from "./types";
 
-export function useSolmu({ data, onNodeMove }: UseSolmuParams) {
+export function useSolmu({ data, onNodeMove, config }: UseSolmuParams) {
   const [dragItem, setDragItem] = React.useState<string | null>(null);
   const [dragOffset, setDragOffset] = React.useState<{ x: number; y: number }>({
     x: 0,
@@ -80,6 +80,7 @@ export function useSolmu({ data, onNodeMove }: UseSolmuParams) {
         const y2 = target.y + tc.y;
 
         if (edge.type === "bezier") {
+          // TODO: calculate bezier curve based on node positions
           return {
             d: `M${x1},${y1} C ${x1 + 50},${y1} ${x2 - 50},${y2} ${x2},${y2}`,
           };
@@ -105,7 +106,11 @@ export function useSolmu({ data, onNodeMove }: UseSolmuParams) {
         };
       },
       render: (props: any) => {
-        const { Node } = node;
+        const Node = config.renderers.find(
+          (r) => r.type === node.type
+        )?.component;
+        if (!Node)
+          throw new Error(`No renderer found for node type ${node.type}`);
         return <Node {...props} />;
       },
       renderConnectors: (config?: any) => {
