@@ -1,7 +1,12 @@
 import React from "react";
 import { SolmuNodeConnector, UseSolmuParams } from "./types";
 
-export function useSolmu({ data, onNodeMove, config }: UseSolmuParams) {
+export function useSolmu({
+  data,
+  onNodeMove,
+  onConnect,
+  config,
+}: UseSolmuParams) {
   const [dragItem, setDragItem] = React.useState<string | null>(null);
   const [dragOffset, setDragOffset] = React.useState<{ x: number; y: number }>({
     x: 0,
@@ -49,9 +54,21 @@ export function useSolmu({ data, onNodeMove, config }: UseSolmuParams) {
     }
   }
 
-  function onConnectorClick(connector: string, node: string) {
+  function onConnectorMouseDown(connector: string, node: string) {
     console.log(connector);
     setDragConnector({ id: connector, node });
+  }
+
+  function onConnectorMouseUp(connector: string, node: string) {
+    console.log(connector);
+    if (dragConnector) {
+      if (onConnect)
+        onConnect(
+          { node: dragConnector.node, connector: dragConnector.id },
+          { node, connector }
+        );
+      setDragConnector(null);
+    }
   }
 
   return {
@@ -82,7 +99,7 @@ export function useSolmu({ data, onNodeMove, config }: UseSolmuParams) {
         if (edge.type === "bezier") {
           // TODO: calculate bezier curve based on node positions
           return {
-            d: `M${x1},${y1} C ${x1 + 50},${y1} ${x2 - 50},${y2} ${x2},${y2}`,
+            d: `M${x1},${y1} C ${x1 + 50},${y1} ${x2 + 50},${y2} ${x2},${y2}`,
           };
         }
 
@@ -115,12 +132,20 @@ export function useSolmu({ data, onNodeMove, config }: UseSolmuParams) {
       },
       renderConnectors: (config?: any) => {
         return node.connectors?.map((connector) => {
+          const isHovered =
+            hoverConnector && hoverConnector.id === connector.id;
           return (
             <rect
-              onClick={() => onConnectorClick(connector.id, node.id)}
+              onMouseDown={() => onConnectorMouseDown(connector.id, node.id)}
               onMouseOver={() =>
                 setHoverConnector({ id: connector.id, node: node.id })
               }
+              onMouseUp={() => onConnectorMouseUp(connector.id, node.id)}
+              style={{
+                transformBox: "fill-box",
+                transformOrigin: "50% 50%",
+                transform: isHovered ? "scale(1.5)" : undefined,
+              }}
               onMouseOut={() => setHoverConnector(null)}
               key={connector.id}
               x={connector.x - 5}

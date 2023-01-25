@@ -114,6 +114,24 @@ export default function App() {
     ],
   });
 
+  function onConnect(
+    start: { node: string; connector: string },
+    end: { node: string; connector: string }
+  ) {
+    setData((data) => {
+      const edges = [
+        ...data.edges,
+        {
+          source: start,
+          target: end,
+          type: "bezier",
+        } as Edge,
+      ];
+
+      return { ...data, edges };
+    });
+  }
+
   function onNodeMove(node: string, x: number, y: number) {
     setData((data) => {
       const nodes = data.nodes.map((d) => {
@@ -149,6 +167,7 @@ export default function App() {
     data,
     config,
     onNodeMove,
+    onConnect,
   });
 
   return (

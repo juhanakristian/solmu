@@ -34,6 +34,11 @@ export type NodeRenderer = {
   component: React.FC;
 };
 
+export type ConnectFunc = (
+  start: { node: string; connector: string },
+  end: { node: string; connector: string }
+) => void;
+
 export type UseSolmuParams = {
   data: {
     nodes: SolmuNode[];
@@ -43,6 +48,7 @@ export type UseSolmuParams = {
     renderers: NodeRenderer[];
   };
   onNodeMove?: NodeMoveFunc;
+  onConnect?: ConnectFunc;
 };
 
 export type NodeMoveFunc = (node: string, x: number, y: number) => void;
