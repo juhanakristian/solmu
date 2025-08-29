@@ -17,6 +17,16 @@ export function useSolmu({
     React.useState<null | SolmuNodeConnector>(null);
   const [hoverConnector, setHoverConnector] =
     React.useState<null | SolmuNodeConnector>(null);
+  const [dragLine, setDragLine] = React.useState<{
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    cx1: number;
+    cy1: number;
+    cx2: number;
+    cy2: number;
+  } | null>(null);
 
   function onMouseDown(event: React.MouseEvent, id: string) {
     setDragItem(id);
@@ -50,7 +60,38 @@ export function useSolmu({
     }
 
     if (dragConnector) {
-      // Render drag line
+      const sourceNode = data.nodes.find((n) => n.id === dragConnector.node);
+      if (sourceNode) {
+        const sourceConnector = sourceNode.connectors?.find(
+          (c) => c.id === dragConnector.id
+        );
+        if (sourceConnector) {
+          const startX = sourceNode.x + sourceConnector.x;
+          const startY = sourceNode.y + sourceConnector.y;
+          const endX = event.clientX;
+          const endY = event.clientY;
+
+          // Calculate control points for the bezier curve
+          const dx = endX - startX;
+          const dy = endY - startY;
+          const controlX1 = startX + dx / 3;
+          const controlY1 = startY;
+          const controlX2 = startX + (dx * 2) / 3;
+          const controlY2 = endY;
+
+          // Update the drag line with bezier curve
+          setDragLine({
+            x1: startX,
+            y1: startY,
+            x2: endX,
+            y2: endY,
+            cx1: controlX1,
+            cy1: controlY1,
+            cx2: controlX2,
+            cy2: controlY2,
+          });
+        }
+      }
     }
   }
 
@@ -161,5 +202,13 @@ export function useSolmu({
         });
       },
     })),
+    dragLine: dragConnector
+      ? {
+          ...dragLine,
+          d: dragLine
+            ? `M${dragLine.x1},${dragLine.y1} C ${dragLine.cx1},${dragLine.cy1} ${dragLine.cx2},${dragLine.cy2} ${dragLine.x2},${dragLine.y2}`
+            : undefined,
+        }
+      : null,
   };
 }

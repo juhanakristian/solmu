@@ -163,7 +163,7 @@ export default function App() {
     ],
   };
 
-  const { containerProps, nodes, edges } = useSolmu({
+  const { containerProps, nodes, edges, dragLine } = useSolmu({
     data,
     config,
     onNodeMove,
@@ -193,6 +193,9 @@ export default function App() {
             </g>
           );
         })}
+        {dragLine && (
+          <path d={dragLine.d} stroke="black" strokeWidth="2" fill="none" />
+        )}
       </svg>
     </div>
   );
