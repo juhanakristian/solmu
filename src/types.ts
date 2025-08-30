@@ -4,11 +4,15 @@ export type SolmuNodeConnector = {
   id: string;
   node: string;
 };
+
 export type Connector = {
   id: string;
   x: number;
   y: number;
 };
+
+// Legacy connector type for backward compatibility
+// New port system is in ports.ts
 
 export type SolmuNode = {
   id: string;
@@ -39,6 +43,78 @@ export type ConnectFunc = (
   end: { node: string; connector: string }
 ) => void;
 
+export type NodeMoveFunc = (node: string, x: number, y: number) => void;
+
+// New simplified API types
+export type SolmuCanvas = {
+  props: React.SVGProps<SVGSVGElement>;
+  width: number;
+  height: number;
+  viewBox: string;
+  gridLines?: Array<{ x1: number; y1: number; x2: number; y2: number }>;
+  viewport?: {
+    screenToWorld: (x: number, y: number) => { x: number; y: number };
+    worldToScreen: (x: number, y: number) => { x: number; y: number };
+    snapToGrid: (point: { x: number; y: number }) => { x: number; y: number };
+    formatCoordinate: (value: number) => string;
+  };
+};
+
+export type SolmuRenderNode = SolmuNode & {
+  transform: string;
+  isSelected?: boolean;
+  isDragging?: boolean;
+  renderer: React.FC<any>;
+  nodeProps: {
+    onMouseDown: (e: React.MouseEvent) => void;
+    onMouseUp: (e: React.MouseEvent) => void;
+  };
+  connectorProps: Array<{
+    key: string;
+    onMouseDown: () => void;
+    onMouseOver: () => void;
+    onMouseUp: () => void;
+    onMouseOut: () => void;
+    style: React.CSSProperties;
+    x: number;
+    y: number;
+    rx: number;
+    ry: number;
+    width: number;
+    height: number;
+    fill: string;
+  }>;
+};
+
+export type SolmuRenderEdge = Edge & {
+  id: string;
+  path: string;
+  isSelected?: boolean;
+};
+
+export type SolmuDragLine = {
+  path: string;
+  isVisible: boolean;
+};
+
+export type SolmuElements = {
+  nodes: SolmuRenderNode[];
+  edges: SolmuRenderEdge[];
+  dragLine: SolmuDragLine | null;
+};
+
+export type SolmuInteractions = {
+  onMouseDown: (event: React.MouseEvent) => void;
+  onMouseMove: (event: React.MouseEvent) => void;
+  onMouseUp: (event: React.MouseEvent) => void;
+};
+
+export type UseSolmuResult = {
+  canvas: SolmuCanvas;
+  elements: SolmuElements;
+  interactions: SolmuInteractions;
+};
+
 export type UseSolmuParams = {
   data: {
     nodes: SolmuNode[];
@@ -46,9 +122,40 @@ export type UseSolmuParams = {
   };
   config: {
     renderers: NodeRenderer[];
+    viewport?: {
+      origin?: 'top-left' | 'bottom-left' | 'center';
+      units?: 'px' | 'mm' | 'in' | 'mil' | 'units';
+      width?: number;
+      height?: number;
+      worldBounds?: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      };
+      zoom?: number;
+      pan?: { x: number; y: number };
+      grid?: {
+        size: number;
+        visible: boolean;
+        snap: boolean;
+      };
+    };
+    connections?: {
+      validateOnCreate?: boolean;
+      validateOnMove?: boolean;
+      showValidationMessages?: boolean;
+      customRules?: Array<{
+        name: string;
+        description: string;
+        validate: (sourcePort: any, targetPort: any) => {
+          valid: boolean;
+          message?: string;
+          severity?: 'error' | 'warning';
+        };
+      }>;
+    };
   };
   onNodeMove?: NodeMoveFunc;
   onConnect?: ConnectFunc;
 };
-
-export type NodeMoveFunc = (node: string, x: number, y: number) => void;
