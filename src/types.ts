@@ -51,12 +51,13 @@ export type SolmuCanvas = {
   width: number;
   height: number;
   viewBox: string;
-  gridLines?: Array<{ x1: number; y1: number; x2: number; y2: number }>;
+  gridDots?: Array<{ x: number; y: number; size: number; opacity: number }>;
   viewport?: {
     screenToWorld: (x: number, y: number) => { x: number; y: number };
     worldToScreen: (x: number, y: number) => { x: number; y: number };
     snapToGrid: (point: { x: number; y: number }) => { x: number; y: number };
     formatCoordinate: (value: number) => string;
+    getEffectiveGridSize: () => number;
   };
 };
 

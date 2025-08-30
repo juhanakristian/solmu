@@ -43,7 +43,7 @@ export default function App() {
     units: 'mm' as const,
     width: window.innerWidth,
     height: window.innerHeight,
-    worldBounds: { x: 0, y: 0, width: 100, height: 75 },
+    worldBounds: { x: -200, y: -200, width: 400, height: 400 },
     zoom: 1,
     pan: { x: 0, y: 0 },
     grid: {
@@ -302,7 +302,17 @@ export default function App() {
         border: '1px solid #e0e0e0',
       }}>
         <div><strong>Solmu Circuit Demo</strong></div>
-        <div>Grid: 2.54mm (0.1")</div>
+        <div>Base Grid: 2.54mm (0.1")</div>
+        <div>Active Grid: {
+          viewportConfig.zoom <= 0.05 ? "508mm" : 
+          viewportConfig.zoom <= 0.1 ? "254mm" : 
+          viewportConfig.zoom <= 0.2 ? "127mm" : 
+          viewportConfig.zoom <= 0.5 ? "50.8mm" : 
+          viewportConfig.zoom <= 1.0 ? "25.4mm" : 
+          viewportConfig.zoom <= 2.0 ? "12.7mm" : 
+          viewportConfig.zoom <= 5.0 ? "2.54mm" : 
+          viewportConfig.zoom <= 10.0 ? "1.27mm" : "0.5mm"
+        }</div>
         <div>Units: mm</div>
         <div>Origin: bottom-left</div>
         <div>Zoom: {viewportConfig.zoom.toFixed(1)}x</div>

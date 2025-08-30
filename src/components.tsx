@@ -26,17 +26,15 @@ export function SolmuCanvas({
         ...style,
       }}
     >
-      {/* Render grid lines */}
-      {canvas.gridLines && canvas.gridLines.map((line, index) => (
-        <line
-          key={`grid-${index}`}
-          x1={line.x1}
-          y1={line.y1}
-          x2={line.x2}
-          y2={line.y2}
-          stroke="#f6f6f6"
-          strokeWidth="0.1"
-          opacity="0.5"
+      {/* Render grid dots */}
+      {canvas.gridDots && canvas.gridDots.map((dot, index) => (
+        <circle
+          key={`grid-dot-${index}`}
+          cx={dot.x}
+          cy={dot.y}
+          r={dot.size}
+          fill="#000"
+          opacity={dot.opacity}
         />
       ))}
       

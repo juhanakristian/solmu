@@ -212,12 +212,13 @@ export function useSolmu({
       width: viewport.getConfig().width,
       height: viewport.getConfig().height,
       viewBox: viewport.getViewBox(),
-      gridLines: viewport.generateGridLines(),
+      gridDots: viewport.generateGridDots(),
       viewport: {
         screenToWorld: (x: number, y: number) => viewport.screenToWorld(x, y),
         worldToScreen: (x: number, y: number) => viewport.worldToScreen(x, y),
         snapToGrid: (point: { x: number; y: number }) => viewport.snapToGrid(point),
         formatCoordinate: (value: number) => viewport.formatCoordinate(value),
+        getEffectiveGridSize: () => viewport.getEffectiveGridSize(),
       },
     },
     elements: {

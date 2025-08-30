@@ -102,7 +102,35 @@ export class SolmuViewport {
     return { x: screenX, y: screenY };
   }
   
-  // Snap point to grid if enabled
+  // Get current effective grid size based on zoom
+  getEffectiveGridSize(): number {
+    const { grid, zoom } = this.config;
+    
+    if (!grid) return 1;
+    
+    const baseGridSize = grid.size;
+    const gridLevels = [
+      { threshold: 0.1, multiplier: 50 },
+      { threshold: 0.2, multiplier: 20 },
+      { threshold: 0.5, multiplier: 10 },
+      { threshold: 1.0, multiplier: 5 },
+      { threshold: 2.0, multiplier: 1 },
+      { threshold: 5.0, multiplier: 0.5 },
+      { threshold: 10.0, multiplier: 0.2 },
+    ];
+    
+    let multiplier = 0.2; // Default to finest grid
+    for (const level of gridLevels) {
+      if (zoom <= level.threshold) {
+        multiplier = level.multiplier;
+        break;
+      }
+    }
+    
+    return baseGridSize * multiplier;
+  }
+
+  // Snap point to grid if enabled (using adaptive grid size)
   snapToGrid(worldPoint: Point2D): Point2D {
     const { grid } = this.config;
     
@@ -110,8 +138,9 @@ export class SolmuViewport {
       return worldPoint;
     }
     
-    const snappedX = Math.round(worldPoint.x / grid.size) * grid.size;
-    const snappedY = Math.round(worldPoint.y / grid.size) * grid.size;
+    const effectiveGridSize = this.getEffectiveGridSize();
+    const snappedX = Math.round(worldPoint.x / effectiveGridSize) * effectiveGridSize;
+    const snappedY = Math.round(worldPoint.y / effectiveGridSize) * effectiveGridSize;
     
     return { x: snappedX, y: snappedY };
   }
@@ -185,43 +214,119 @@ export class SolmuViewport {
     return `${viewX} ${viewY} ${viewWidth} ${viewHeight}`;
   }
   
-  // Generate grid lines for rendering
-  generateGridLines(): Array<{ x1: number; y1: number; x2: number; y2: number }> {
-    const { grid, worldBounds } = this.config;
+  // Generate grid dots for rendering with adaptive density
+  generateGridDots(): Array<{ x: number; y: number; size: number; opacity: number }> {
+    const { grid, worldBounds, zoom, pan, width, height } = this.config;
     
     if (!grid?.visible) {
       return [];
     }
     
-    const lines: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
-    const { x, y, width, height } = worldBounds;
+    const dots: Array<{ x: number; y: number; size: number; opacity: number }> = [];
     
-    // Vertical lines
-    const startX = Math.floor(x / grid.size) * grid.size;
-    for (let lineX = startX; lineX <= x + width; lineX += grid.size) {
-      if (lineX >= x && lineX <= x + width) {
-        lines.push({
-          x1: lineX,
-          y1: y,
-          x2: lineX,
-          y2: y + height
-        });
+    // Calculate the actual visible area based on screen dimensions and zoom/pan
+    // Use screen aspect ratio to determine how much world space is visible
+    const screenAspectRatio = width / height;
+    const worldAspectRatio = worldBounds.width / worldBounds.height;
+    
+    let viewWidth, viewHeight;
+    
+    if (screenAspectRatio > worldAspectRatio) {
+      // Screen is wider than world bounds - fit to height, extend width
+      viewHeight = worldBounds.height / zoom;
+      viewWidth = viewHeight * screenAspectRatio;
+    } else {
+      // Screen is taller than world bounds - fit to width, extend height
+      viewWidth = worldBounds.width / zoom;
+      viewHeight = viewWidth / screenAspectRatio;
+    }
+    
+    const centerX = worldBounds.x + worldBounds.width / 2 + pan.x * worldBounds.width;
+    const centerY = worldBounds.y + worldBounds.height / 2 + pan.y * worldBounds.height;
+    
+    const visibleArea = {
+      x: centerX - viewWidth / 2,
+      y: centerY - viewHeight / 2,
+      width: viewWidth,
+      height: viewHeight
+    };
+    
+    // Calculate adaptive grid size based on zoom level
+    // Base grid size (e.g., 2.54mm = 0.1")
+    const baseGridSize = grid.size;
+    
+    // Define grid levels with multipliers - more aggressive spacing when zoomed out
+    const gridLevels = [
+      { threshold: 0.05, multiplier: 200, size: 0.4, opacity: 0.8 },  // Ultra zoomed out: 200x grid (508mm)
+      { threshold: 0.1, multiplier: 100, size: 0.35, opacity: 0.7 },  // Very zoomed out: 100x grid (254mm)
+      { threshold: 0.2, multiplier: 50, size: 0.3, opacity: 0.6 },    // Zoomed out: 50x grid (127mm)
+      { threshold: 0.5, multiplier: 20, size: 0.25, opacity: 0.5 },   // Medium-out: 20x grid (50.8mm)
+      { threshold: 1.0, multiplier: 10, size: 0.2, opacity: 0.4 },    // Medium: 10x grid (25.4mm)
+      { threshold: 2.0, multiplier: 5, size: 0.15, opacity: 0.4 },    // Normal: 5x grid (12.7mm)
+      { threshold: 5.0, multiplier: 1, size: 0.1, opacity: 0.4 },     // Zoomed in: 1x grid (2.54mm)
+      { threshold: 10.0, multiplier: 0.5, size: 0.08, opacity: 0.3 }, // Very zoomed in: 0.5x grid (1.27mm)
+      { threshold: 20.0, multiplier: 0.2, size: 0.06, opacity: 0.3 }, // Ultra zoomed: 0.2x grid (0.508mm)
+    ];
+    
+    // Find appropriate grid level based on zoom
+    let currentLevel = gridLevels[gridLevels.length - 1]; // Default to finest grid
+    for (const level of gridLevels) {
+      if (zoom <= level.threshold) {
+        currentLevel = level;
+        break;
       }
     }
     
-    // Horizontal lines
-    const startY = Math.floor(y / grid.size) * grid.size;
-    for (let lineY = startY; lineY <= y + height; lineY += grid.size) {
-      if (lineY >= y && lineY <= y + height) {
-        lines.push({
-          x1: x,
-          y1: lineY,
-          x2: x + width,
-          y2: lineY
-        });
+    const effectiveGridSize = baseGridSize * currentLevel.multiplier;
+    
+    // Generate dots at adaptive grid intersections across the visible area
+    const startX = Math.floor(visibleArea.x / effectiveGridSize) * effectiveGridSize;
+    const startY = Math.floor(visibleArea.y / effectiveGridSize) * effectiveGridSize;
+    const endX = visibleArea.x + visibleArea.width;
+    const endY = visibleArea.y + visibleArea.height;
+    
+    // Calculate estimated number of dots to avoid performance issues
+    const dotsX = Math.ceil((endX - startX) / effectiveGridSize);
+    const dotsY = Math.ceil((endY - startY) / effectiveGridSize);
+    const estimatedDots = dotsX * dotsY;
+    
+    // Maximum number of dots for performance (adjust based on device capability)
+    const maxDots = 2000;
+    
+    if (estimatedDots > maxDots) {
+      // If too many dots, increase grid size to reduce count
+      const reductionFactor = Math.ceil(Math.sqrt(estimatedDots / maxDots));
+      const reducedGridSize = effectiveGridSize * reductionFactor;
+      
+      const reducedStartX = Math.floor(visibleArea.x / reducedGridSize) * reducedGridSize;
+      const reducedStartY = Math.floor(visibleArea.y / reducedGridSize) * reducedGridSize;
+      
+      for (let dotX = reducedStartX; dotX <= endX; dotX += reducedGridSize) {
+        for (let dotY = reducedStartY; dotY <= endY; dotY += reducedGridSize) {
+          if (dots.length >= maxDots) break;
+          dots.push({ 
+            x: dotX, 
+            y: dotY, 
+            size: currentLevel.size * 1.5, // Slightly larger dots when sparse
+            opacity: currentLevel.opacity * 0.8
+          });
+        }
+        if (dots.length >= maxDots) break;
+      }
+    } else {
+      // Normal dot generation when count is reasonable
+      for (let dotX = startX; dotX <= endX; dotX += effectiveGridSize) {
+        for (let dotY = startY; dotY <= endY; dotY += effectiveGridSize) {
+          dots.push({ 
+            x: dotX, 
+            y: dotY, 
+            size: currentLevel.size,
+            opacity: currentLevel.opacity
+          });
+        }
       }
     }
     
-    return lines;
+    return dots;
   }
 }
