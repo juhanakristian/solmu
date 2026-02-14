@@ -18,6 +18,7 @@ export type SolmuNode = {
   id: string;
   x: number;
   y: number;
+  rotation?: number;
   connectors?: Connector[];
   type: string;
 };
