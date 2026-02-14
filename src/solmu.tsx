@@ -103,6 +103,7 @@ export function useSolmu({
             
             const ctm = svg.getScreenCTM();
             if (ctm) {
+              // Convert point to world coordinates
               const worldPoint = svgPoint.matrixTransform(ctm.inverse());
               const endX = worldPoint.x;
               const endY = worldPoint.y;

@@ -125,7 +125,7 @@ export default function App() {
           node: "ic1",
           connector: "ic1-pin1",
         },
-        type: "bezier",
+        type: "line",
       } as Edge,
     ],
   });
