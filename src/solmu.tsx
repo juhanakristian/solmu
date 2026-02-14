@@ -192,13 +192,10 @@ export function useSolmu({
     cornerRadius: config.routing?.cornerRadius ?? 3,
   };
 
-  // Get node bounds for obstacle avoidance (cached per render)
-  const nodeBoundsCache = React.useMemo(() => {
-    if (config.routing?.avoidNodes === false) {
-      return [];
-    }
-    return getNodeBounds(data.nodes);
-  }, [data.nodes, config.routing?.avoidNodes]);
+  // Get node bounds for obstacle avoidance
+  const nodeBoundsCache = config.routing?.avoidNodes === false
+    ? []
+    : getNodeBounds(data.nodes);
 
   const createEdgePath = (edge: typeof data.edges[0]) => {
     const source = data.nodes.find((n) => n.id === edge.source.node);

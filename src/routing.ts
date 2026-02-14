@@ -364,14 +364,22 @@ function simplifyPath(path: Point[]): Point[] {
     const dx2 = next.x - curr.x;
     const dy2 = next.y - curr.y;
 
-    // If direction changes, keep the point
-    const sameDirection =
+    // Cross product - if near zero, points are collinear
+    const crossProduct = Math.abs(dx1 * dy2 - dx2 * dy1);
+
+    // Points are collinear (same direction) if:
+    // - Both segments are vertical (dx1 === 0 && dx2 === 0), OR
+    // - Both segments are horizontal going same direction, OR
+    // - Zero-length segment, OR
+    // - Cross product is near zero (general collinearity check)
+    const isCollinear =
       (dx1 === 0 && dx2 === 0) ||
       (dy1 === 0 && dy2 === 0 && Math.sign(dx1) === Math.sign(dx2)) ||
-      (dx1 === 0 && dy1 === 0) || // Zero-length segment
-      (Math.abs(dx1 * dy2 - dx2 * dy1) > 0.001);
+      (dx1 === 0 && dy1 === 0) ||
+      (crossProduct < 0.001 && Math.sign(dx1) === Math.sign(dx2) && Math.sign(dy1) === Math.sign(dy2));
 
-    if (!sameDirection) {
+    // Keep points where direction changes (not collinear)
+    if (!isCollinear) {
       simplified.push(curr);
     }
   }
