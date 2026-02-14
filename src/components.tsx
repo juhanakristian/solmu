@@ -20,7 +20,7 @@ export function SolmuCanvas({
       {...svgProps}
       viewBox={canvas.viewBox}
       style={{
-        background: "white",
+        background: "#0d1117",
         width: "100%",
         height: "100%",
         ...style,
@@ -33,7 +33,7 @@ export function SolmuCanvas({
           cx={dot.x}
           cy={dot.y}
           r={dot.size}
-          fill="#000"
+          fill="#2a3a5c"
           opacity={dot.opacity}
         />
       ))}
@@ -44,8 +44,8 @@ export function SolmuCanvas({
           key={edge.id}
           d={edge.path}
           fill="none"
-          stroke="#efefef"
-          strokeWidth={2}
+          stroke="#00e676"
+          strokeWidth={0.4}
         />
       ))}
       
@@ -54,8 +54,10 @@ export function SolmuCanvas({
         const NodeComponent = node.renderer;
         return (
           <g key={node.id} transform={node.transform}>
-            <NodeComponent {...node.nodeProps} />
-            {/* Render connectors */}
+            <g transform={node.rotation ? `rotate(${node.rotation})` : undefined}>
+              <NodeComponent {...node.nodeProps} />
+            </g>
+            {/* Connectors stay unrotated — their positions are pre-rotated in data */}
             {node.connectorProps.map((connectorProps) => {
               const { key, ...rectProps } = connectorProps;
               return <rect key={key} {...rectProps} />;
@@ -68,8 +70,8 @@ export function SolmuCanvas({
       {elements.dragLine?.isVisible && (
         <path
           d={elements.dragLine.path}
-          stroke="black"
-          strokeWidth="2"
+          stroke="#64ffda"
+          strokeWidth="0.4"
           fill="none"
         />
       )}

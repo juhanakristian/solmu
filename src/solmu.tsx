@@ -179,7 +179,7 @@ export function useSolmu({
         ry: 3,
         width: 2,
         height: 2,
-        fill: "#dedede",
+        fill: "#64ffda",
       };
     }) || [];
   };
