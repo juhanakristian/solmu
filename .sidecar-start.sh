@@ -12,4 +12,4 @@ claude --dangerously-skip-permissions "$(cat <<'SIDECAR_PROMPT_EOF'
 Start work on td-96d049. Use td to track progress.
 SIDECAR_PROMPT_EOF
 )"
-rm -f "/Users/juhana/projects/solmu-routing-algorithm/.sidecar-start.sh"
+rm -f "/Users/juhana/projects/solmu-routing/.sidecar-start.sh"
