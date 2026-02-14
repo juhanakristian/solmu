@@ -52,12 +52,14 @@ export default function App() {
       snap: true,
     },
   });
+  const [routingMode, setRoutingMode] = React.useState<'orthogonal' | 'bezier' | 'direct'>('orthogonal');
+
   const [data, setData] = React.useState({
     nodes: [
       {
         id: "resistor1",
-        x: 20, // 20mm from left
-        y: 40, // 40mm from bottom
+        x: 0, // Start position
+        y: 30,
         type: "box",
         connectors: [
           {
@@ -74,12 +76,30 @@ export default function App() {
       },
       {
         id: "capacitor1",
-        x: 50, // 50mm from left
-        y: 20, // 20mm from bottom
+        x: 60, // End position
+        y: 30,
         type: "box",
         connectors: [
           {
             id: "capacitor1-pin1",
+            x: -7.5,
+            y: 0,
+          },
+          {
+            id: "capacitor1-pin2",
+            x: 7.5,
+            y: 0,
+          },
+        ],
+      },
+      {
+        id: "obstacle1",
+        x: 30, // Obstacle in the middle
+        y: 30,
+        type: "box",
+        connectors: [
+          {
+            id: "obstacle1-pin1",
             x: 0,
             y: 2.5,
           },
@@ -87,8 +107,8 @@ export default function App() {
       },
       {
         id: "ic1",
-        x: 30, // 30mm from left
-        y: 60, // 60mm from bottom
+        x: 30, // Another component
+        y: 60,
         type: "diamond",
         connectors: [
           {
@@ -103,29 +123,61 @@ export default function App() {
           },
         ],
       },
+      {
+        id: "resistor2",
+        x: -30,
+        y: 0,
+        type: "box",
+        connectors: [
+          {
+            id: "resistor2-pin1",
+            x: -7.5,
+            y: 0,
+          },
+          {
+            id: "resistor2-pin2",
+            x: 7.5,
+            y: 0,
+          },
+        ],
+      },
     ],
     edges: [
-      {
-        source: {
-          node: "resistor1",
-          connector: "resistor1-pin1",
-        },
-        target: {
-          node: "capacitor1",
-          connector: "capacitor1-pin1",
-        },
-        type: "bezier",
-      } as Edge,
+      // This edge should route AROUND obstacle1
       {
         source: {
           node: "resistor1",
           connector: "resistor1-pin2",
         },
         target: {
+          node: "capacitor1",
+          connector: "capacitor1-pin1",
+        },
+        type: "orthogonal",
+      } as Edge,
+      // Edge to IC
+      {
+        source: {
+          node: "resistor1",
+          connector: "resistor1-pin1",
+        },
+        target: {
           node: "ic1",
           connector: "ic1-pin1",
         },
         type: "line",
+      } as Edge,
+      // Direct line for comparison
+      {
+        source: {
+          node: "resistor2",
+          connector: "resistor2-pin2",
+        },
+        target: {
+          node: "obstacle1",
+          connector: "obstacle1-pin1",
+        },
+        type: "direct",
       } as Edge,
     ],
   });
@@ -140,7 +192,7 @@ export default function App() {
         {
           source: start,
           target: end,
-          type: "bezier",
+          type: routingMode,
         } as Edge,
       ];
 
@@ -178,6 +230,13 @@ export default function App() {
       },
     ],
     viewport: viewportConfig,
+    routing: {
+      mode: routingMode,
+      avoidNodes: true,
+      margin: 3,
+      gridSize: 2.54,
+      cornerRadius: 3,
+    },
   };
 
   console.log(viewportConfig);
@@ -287,40 +346,69 @@ export default function App() {
       style={{ width: "100%", height: "100%", position: "relative" }}
     >
       {/* Coordinate display */}
-      <div style={{ 
-        position: 'absolute', 
-        top: 20, 
-        left: 20, 
-        background: 'rgba(255,255,255,0.95)', 
-        padding: '12px', 
+      <div style={{
+        position: 'absolute',
+        top: 20,
+        left: 20,
+        background: 'rgba(255,255,255,0.95)',
+        padding: '12px',
         borderRadius: '8px',
         fontSize: '13px',
         fontFamily: 'monospace',
         zIndex: 1000,
-        pointerEvents: 'none',
         boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
         border: '1px solid #e0e0e0',
       }}>
-        <div><strong>Solmu Circuit Demo</strong></div>
-        <div>Base Grid: 2.54mm (0.1")</div>
-        <div>Active Grid: {
-          viewportConfig.zoom <= 0.05 ? "508mm" : 
-          viewportConfig.zoom <= 0.1 ? "254mm" : 
-          viewportConfig.zoom <= 0.2 ? "127mm" : 
-          viewportConfig.zoom <= 0.5 ? "50.8mm" : 
-          viewportConfig.zoom <= 1.0 ? "25.4mm" : 
-          viewportConfig.zoom <= 2.0 ? "12.7mm" : 
-          viewportConfig.zoom <= 5.0 ? "2.54mm" : 
-          viewportConfig.zoom <= 10.0 ? "1.27mm" : "0.5mm"
-        }</div>
-        <div>Units: mm</div>
-        <div>Origin: bottom-left</div>
+        <div><strong>Solmu Routing Demo</strong></div>
         <div>Zoom: {viewportConfig.zoom.toFixed(1)}x</div>
         <div>Mouse: {canvas.viewport?.formatCoordinate(mousePos.x)}, {canvas.viewport?.formatCoordinate(mousePos.y)}</div>
-        <hr style={{ margin: '4px 0' }} />
-        <div><small>🖱️ Scroll: Zoom</small></div>
-        <div><small>🖱️ Middle/Ctrl+Drag: Pan</small></div>
-        <div><small>🖱️ Drag nodes to move</small></div>
+        <hr style={{ margin: '8px 0' }} />
+        <div style={{ marginBottom: '8px' }}><strong>Routing Mode:</strong></div>
+        <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
+          <button
+            onClick={() => setRoutingMode('orthogonal')}
+            style={{
+              padding: '4px 8px',
+              background: routingMode === 'orthogonal' ? '#4CAF50' : '#ddd',
+              color: routingMode === 'orthogonal' ? 'white' : 'black',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+            }}
+          >
+            90°
+          </button>
+          <button
+            onClick={() => setRoutingMode('bezier')}
+            style={{
+              padding: '4px 8px',
+              background: routingMode === 'bezier' ? '#2196F3' : '#ddd',
+              color: routingMode === 'bezier' ? 'white' : 'black',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+            }}
+          >
+            Bezier
+          </button>
+          <button
+            onClick={() => setRoutingMode('direct')}
+            style={{
+              padding: '4px 8px',
+              background: routingMode === 'direct' ? '#FF9800' : '#ddd',
+              color: routingMode === 'direct' ? 'white' : 'black',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+            }}
+          >
+            Direct
+          </button>
+        </div>
+        <hr style={{ margin: '8px 0' }} />
+        <div><small>Scroll: Zoom</small></div>
+        <div><small>Middle/Ctrl+Drag: Pan</small></div>
+        <div><small>Drag nodes to move</small></div>
       </div>
       
       {/* Canvas container with zoom/pan */}

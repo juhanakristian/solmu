@@ -1,6 +1,7 @@
 import React from "react";
 import { SolmuNodeConnector, UseSolmuParams, UseSolmuResult } from "./types";
 import { SolmuViewport } from "./viewport";
+import { calculateRoute, getNodeBounds, type InternalRoutingConfig, type NodeBounds } from "./routing";
 
 export function useSolmu({
   data,
@@ -183,6 +184,22 @@ export function useSolmu({
     }) || [];
   };
 
+  // Get routing configuration with defaults
+  const routingConfig: InternalRoutingConfig = {
+    mode: config.routing?.mode || 'bezier',
+    margin: config.routing?.margin ?? 3,
+    gridSize: config.routing?.gridSize ?? 2.54,
+    cornerRadius: config.routing?.cornerRadius ?? 3,
+  };
+
+  // Get node bounds for obstacle avoidance (cached per render)
+  const nodeBoundsCache = React.useMemo(() => {
+    if (config.routing?.avoidNodes === false) {
+      return [];
+    }
+    return getNodeBounds(data.nodes);
+  }, [data.nodes, config.routing?.avoidNodes]);
+
   const createEdgePath = (edge: typeof data.edges[0]) => {
     const source = data.nodes.find((n) => n.id === edge.source.node);
     const target = data.nodes.find((n) => n.id === edge.target.node);
@@ -197,11 +214,34 @@ export function useSolmu({
     const x2 = target.x + tc.x;
     const y2 = target.y + tc.y;
 
-    if (edge.type === "bezier") {
-      return `M${x1},${y1} C ${x1 + 50},${y1} ${x2 + 50},${y2} ${x2},${y2}`;
+    const start = { x: x1, y: y1 };
+    const end = { x: x2, y: y2 };
+
+    // Legacy "line" type - simple direct line
+    if (edge.type === "line") {
+      return `M${x1},${y1} L ${x2},${y2}`;
     }
 
-    return `M${x1},${y1} L ${x2},${y2}`;
+    // Determine routing mode based on edge type
+    let mode = routingConfig.mode;
+    if (edge.type === "orthogonal") {
+      mode = "orthogonal";
+    } else if (edge.type === "direct") {
+      mode = "direct";
+    } else if (edge.type === "bezier") {
+      mode = "bezier";
+    }
+
+    // Filter out source and target nodes from obstacles
+    const obstacles = nodeBoundsCache.filter(
+      (ob) => ob.id !== source.id && ob.id !== target.id
+    );
+
+    // Use routing algorithm
+    return calculateRoute(start, end, obstacles, {
+      ...routingConfig,
+      mode,
+    });
   };
 
   return {
