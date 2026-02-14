@@ -27,10 +27,12 @@ export type EdgeNode = {
   connector: string;
 };
 
+export type EdgeType = "bezier" | "orthogonal" | "line" | "direct";
+
 export type Edge = {
   source: EdgeNode;
   target: EdgeNode;
-  type: "bezier" | "line";
+  type: EdgeType;
 };
 
 export type NodeRenderer = {
@@ -116,6 +118,20 @@ export type UseSolmuResult = {
   interactions: SolmuInteractions;
 };
 
+import type { RoutingMode } from './routing';
+
+export type RoutingConfig = {
+  mode?: RoutingMode;           // Default routing mode for edges
+  avoidNodes?: boolean;         // Whether to route around nodes
+  margin?: number;              // Margin around obstacles (default: 5)
+  gridSize?: number;            // Pathfinding grid size (default: 5)
+  cornerRadius?: number;        // Corner radius for bezier mode (default: 5)
+  nodeDimensions?: {            // Default node dimensions for obstacle detection
+    width?: number;
+    height?: number;
+  };
+};
+
 export type UseSolmuParams = {
   data: {
     nodes: SolmuNode[];
@@ -142,6 +158,7 @@ export type UseSolmuParams = {
         snap: boolean;
       };
     };
+    routing?: RoutingConfig;
     connections?: {
       validateOnCreate?: boolean;
       validateOnMove?: boolean;
