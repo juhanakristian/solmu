@@ -127,6 +127,7 @@ export type RoutingConfig = {
   margin?: number;              // Margin around obstacles (default: 5)
   gridSize?: number;            // Pathfinding grid size (default: 5)
   cornerRadius?: number;        // Corner radius for bezier mode (default: 5)
+  stubLength?: number;          // Min distance from node before first turn (default: 0)
   nodeDimensions?: {            // Default node dimensions for obstacle detection
     width?: number;
     height?: number;

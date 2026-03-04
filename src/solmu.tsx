@@ -190,12 +190,13 @@ export function useSolmu({
     margin: config.routing?.margin ?? 3,
     gridSize: config.routing?.gridSize ?? 2.54,
     cornerRadius: config.routing?.cornerRadius ?? 3,
+    stubLength: config.routing?.stubLength ?? 0,
   };
 
   // Get node bounds for obstacle avoidance
   const nodeBoundsCache = config.routing?.avoidNodes === false
     ? []
-    : getNodeBounds(data.nodes);
+    : getNodeBounds(data.nodes, undefined, config.routing?.nodeDimensions);
 
   const createEdgePath = (edge: typeof data.edges[0]) => {
     const source = data.nodes.find((n) => n.id === edge.source.node);
@@ -238,7 +239,7 @@ export function useSolmu({
     return calculateRoute(start, end, obstacles, {
       ...routingConfig,
       mode,
-    });
+    }, sc, tc);
   };
 
   return {
