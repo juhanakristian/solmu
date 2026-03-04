@@ -1,7 +1,7 @@
 import { useSolmu } from "./solmu";
-import { SolmuCanvas, DefaultConnectorRenderer, DefaultEdgeRenderer } from "./components";
+import { SolmuCanvas, DefaultConnectorRenderer, DefaultEdgeRenderer, SolmuMarkerDefs } from "./components";
 
-export { useSolmu, SolmuCanvas, DefaultConnectorRenderer, DefaultEdgeRenderer };
+export { useSolmu, SolmuCanvas, DefaultConnectorRenderer, DefaultEdgeRenderer, SolmuMarkerDefs };
 export * from "./types";
 export * from "./viewport";
 

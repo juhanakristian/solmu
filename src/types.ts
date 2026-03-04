@@ -31,11 +31,15 @@ export type EdgeNode = {
 
 export type EdgeType = "bezier" | "orthogonal" | "line" | "direct";
 
+export type EdgeMarker = "arrow" | "arrow-open" | (string & {});
+
 export type EdgeStyle = {
   stroke?: string;
   strokeWidth?: number;
   strokeDasharray?: string;
   opacity?: number;
+  markerStart?: EdgeMarker;
+  markerEnd?: EdgeMarker;
 };
 
 export type Edge = {

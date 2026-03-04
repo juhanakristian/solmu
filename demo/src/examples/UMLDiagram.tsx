@@ -1,5 +1,5 @@
 import React from "react";
-import { useSolmu, SolmuCanvas, DefaultConnectorRenderer } from "../../../src";
+import { useSolmu, SolmuCanvas, DefaultConnectorRenderer, SolmuMarkerDefs, DefaultEdgeRenderer } from "../../../src";
 import type { Edge } from "../../../src/types";
 
 // --- UML Class Box Renderer ---
@@ -236,6 +236,8 @@ function UMLCanvas({
         ...style,
       }}
     >
+      <SolmuMarkerDefs edges={elements.edges} />
+
       {/* Grid dots */}
       {canvas.gridDots?.map((dot: any, i: number) => (
         <circle
@@ -247,13 +249,7 @@ function UMLCanvas({
 
       {/* Edges */}
       {elements.edges.map((edge: any) => (
-        <path
-          key={edge.id}
-          d={edge.path}
-          fill="none"
-          stroke="#5d4037"
-          strokeWidth={0.3}
-        />
+        <DefaultEdgeRenderer key={edge.id} edge={edge} />
       ))}
 
       {/* Nodes */}
@@ -343,35 +339,40 @@ export default function UMLDiagramApp() {
       { id: "CreditCard", x: 90, y: 20, type: "uml-class", connectors: computeConnectors("CreditCard") },
     ],
     edges: [
-      // User 1---* Order
+      // User 1---* Order (association)
       {
         source: { node: "User", connector: "User-right" },
         target: { node: "Order", connector: "Order-left" },
         type: "orthogonal",
+        style: { stroke: "#5d4037", strokeWidth: 0.3, markerEnd: "arrow-open" },
       } as Edge,
-      // Order 1---* OrderItem
+      // Order 1---* OrderItem (association)
       {
         source: { node: "Order", connector: "Order-bottom" },
         target: { node: "OrderItem", connector: "OrderItem-top" },
         type: "orthogonal",
+        style: { stroke: "#5d4037", strokeWidth: 0.3, markerEnd: "arrow-open" },
       } as Edge,
-      // OrderItem *---1 Product
+      // OrderItem *---1 Product (association)
       {
         source: { node: "OrderItem", connector: "OrderItem-left" },
         target: { node: "Product", connector: "Product-right" },
         type: "orthogonal",
+        style: { stroke: "#5d4037", strokeWidth: 0.3, markerEnd: "arrow-open" },
       } as Edge,
-      // Order ----> PaymentMethod (uses)
+      // Order ----> PaymentMethod (uses / dependency)
       {
         source: { node: "Order", connector: "Order-right" },
         target: { node: "PaymentMethod", connector: "PaymentMethod-left" },
         type: "orthogonal",
+        style: { stroke: "#5d4037", strokeWidth: 0.3, strokeDasharray: "2 1", markerEnd: "arrow-open" },
       } as Edge,
       // CreditCard --|> PaymentMethod (implements)
       {
         source: { node: "CreditCard", connector: "CreditCard-top" },
         target: { node: "PaymentMethod", connector: "PaymentMethod-bottom" },
         type: "orthogonal",
+        style: { stroke: "#5d4037", strokeWidth: 0.3, strokeDasharray: "2 1", markerEnd: "arrow" },
       } as Edge,
     ],
   });

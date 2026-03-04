@@ -1,5 +1,68 @@
 import React from "react";
-import type { SolmuCanvas as SolmuCanvasData, SolmuElements, ConnectorRendererProps, EdgeRendererProps } from "./types";
+import type { SolmuCanvas as SolmuCanvasData, SolmuElements, ConnectorRendererProps, EdgeRendererProps, SolmuRenderEdge } from "./types";
+
+const BUILTIN_MARKER_IDS = {
+  "arrow": "solmu-arrow",
+  "arrow-open": "solmu-arrow-open",
+} as const;
+
+function markerUrl(name: string | undefined): string | undefined {
+  if (!name) return undefined;
+  const id = BUILTIN_MARKER_IDS[name as keyof typeof BUILTIN_MARKER_IDS] ?? name;
+  return `url(#${id})`;
+}
+
+/** Renders SVG <defs> containing the built-in arrowhead markers needed by the given edges.
+ *  Export this and render it in custom canvases that use edge markers. */
+export function SolmuMarkerDefs({ edges }: { edges: SolmuRenderEdge[] }) {
+  const needed = new Set<string>();
+  for (const edge of edges) {
+    if (edge.style?.markerEnd) needed.add(edge.style.markerEnd);
+    if (edge.style?.markerStart) needed.add(edge.style.markerStart);
+  }
+
+  const needArrow = needed.has("arrow");
+  const needArrowOpen = needed.has("arrow-open");
+  if (!needArrow && !needArrowOpen) return null;
+
+  return (
+    <defs>
+      {needArrow && (
+        <marker
+          id={BUILTIN_MARKER_IDS["arrow"]}
+          markerWidth="10"
+          markerHeight="7"
+          refX="9"
+          refY="3.5"
+          orient="auto"
+          markerUnits="strokeWidth"
+        >
+          <path d="M 0 0 L 10 3.5 L 0 7 Z" fill="context-stroke" stroke="none" />
+        </marker>
+      )}
+      {needArrowOpen && (
+        <marker
+          id={BUILTIN_MARKER_IDS["arrow-open"]}
+          markerWidth="10"
+          markerHeight="7"
+          refX="9"
+          refY="3.5"
+          orient="auto"
+          markerUnits="strokeWidth"
+        >
+          <polyline
+            points="0,0 9,3.5 0,7"
+            stroke="context-stroke"
+            strokeWidth="1.5"
+            fill="none"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        </marker>
+      )}
+    </defs>
+  );
+}
 
 export function DefaultEdgeRenderer({ edge }: EdgeRendererProps) {
   return (
@@ -10,6 +73,8 @@ export function DefaultEdgeRenderer({ edge }: EdgeRendererProps) {
       strokeWidth={edge.style?.strokeWidth ?? 0.4}
       strokeDasharray={edge.style?.strokeDasharray}
       opacity={edge.style?.opacity}
+      markerStart={markerUrl(edge.style?.markerStart)}
+      markerEnd={markerUrl(edge.style?.markerEnd)}
     />
   );
 }
@@ -68,6 +133,8 @@ export function SolmuCanvas({
         ...style,
       }}
     >
+      <SolmuMarkerDefs edges={elements.edges} />
+
       {/* Render grid dots */}
       {canvas.gridDots && canvas.gridDots.map((dot, index) => (
         <circle
@@ -79,12 +146,12 @@ export function SolmuCanvas({
           opacity={dot.opacity}
         />
       ))}
-      
+
       {/* Render edges */}
       {elements.edges.map((edge) => (
         <EdgeRenderer key={edge.id} edge={edge} />
       ))}
-      
+
       {/* Render nodes */}
       {elements.nodes.map((node) => {
         const NodeComponent = node.renderer;
@@ -100,7 +167,7 @@ export function SolmuCanvas({
           </g>
         );
       })}
-      
+
       {/* Render drag line */}
       {elements.dragLine?.isVisible && (
         <path
@@ -110,7 +177,7 @@ export function SolmuCanvas({
           fill="none"
         />
       )}
-      
+
       {/* Custom children */}
       {children}
     </svg>
