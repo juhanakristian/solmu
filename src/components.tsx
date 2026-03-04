@@ -1,5 +1,18 @@
 import React from "react";
-import type { SolmuCanvas as SolmuCanvasData, SolmuElements, ConnectorRendererProps } from "./types";
+import type { SolmuCanvas as SolmuCanvasData, SolmuElements, ConnectorRendererProps, EdgeRendererProps } from "./types";
+
+export function DefaultEdgeRenderer({ edge }: EdgeRendererProps) {
+  return (
+    <path
+      d={edge.path}
+      fill="none"
+      stroke={edge.style?.stroke ?? "#00e676"}
+      strokeWidth={edge.style?.strokeWidth ?? 0.4}
+      strokeDasharray={edge.style?.strokeDasharray}
+      opacity={edge.style?.opacity}
+    />
+  );
+}
 
 export function DefaultConnectorRenderer({ connector, node, isHovered, onMouseDown, onMouseOver, onMouseUp, onMouseOut }: ConnectorRendererProps) {
   const size = 2;
@@ -29,6 +42,7 @@ export interface SolmuCanvasProps extends React.SVGProps<SVGSVGElement> {
   canvas: SolmuCanvasData;
   elements: SolmuElements;
   connectorRenderer?: React.FC<ConnectorRendererProps>;
+  edgeRenderer?: React.FC<EdgeRendererProps>;
   children?: React.ReactNode;
 }
 
@@ -36,6 +50,7 @@ export function SolmuCanvas({
   canvas,
   elements,
   connectorRenderer: ConnectorRenderer = DefaultConnectorRenderer,
+  edgeRenderer: EdgeRenderer = DefaultEdgeRenderer,
   children,
   style,
   ...svgProps
@@ -67,13 +82,7 @@ export function SolmuCanvas({
       
       {/* Render edges */}
       {elements.edges.map((edge) => (
-        <path
-          key={edge.id}
-          d={edge.path}
-          fill="none"
-          stroke="#00e676"
-          strokeWidth={0.4}
-        />
+        <EdgeRenderer key={edge.id} edge={edge} />
       ))}
       
       {/* Render nodes */}

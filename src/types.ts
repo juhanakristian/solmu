@@ -31,10 +31,18 @@ export type EdgeNode = {
 
 export type EdgeType = "bezier" | "orthogonal" | "line" | "direct";
 
+export type EdgeStyle = {
+  stroke?: string;
+  strokeWidth?: number;
+  strokeDasharray?: string;
+  opacity?: number;
+};
+
 export type Edge = {
   source: EdgeNode;
   target: EdgeNode;
   type: EdgeType;
+  style?: EdgeStyle;
 };
 
 export type NodeRendererProps<TData = unknown> = {
@@ -94,6 +102,10 @@ export type SolmuRenderEdge = Edge & {
   id: string;
   path: string;
   isSelected?: boolean;
+};
+
+export type EdgeRendererProps = {
+  edge: SolmuRenderEdge;
 };
 
 export type SolmuDragLine = {
