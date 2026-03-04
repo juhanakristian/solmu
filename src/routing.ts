@@ -35,7 +35,7 @@ const DEFAULT_NODE_HEIGHT = 5;
  * Extract bounding boxes from nodes for obstacle detection
  */
 export function getNodeBounds(
-  nodes: SolmuNode[],
+  nodes: SolmuNode<any>[],
   excludeNodes?: string[],
   defaultDimensions?: { width?: number; height?: number }
 ): NodeBounds[] {

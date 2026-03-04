@@ -14,13 +14,14 @@ export type Connector = {
 // Legacy connector type for backward compatibility
 // New port system is in ports.ts
 
-export type SolmuNode = {
+export type SolmuNode<TData = unknown> = {
   id: string;
   x: number;
   y: number;
   rotation?: number;
   connectors?: Connector[];
   type: string;
+  data?: TData;
 };
 
 export type EdgeNode = {
@@ -64,7 +65,7 @@ export type SolmuCanvas = {
   };
 };
 
-export type SolmuRenderNode = SolmuNode & {
+export type SolmuRenderNode<TData = unknown> = SolmuNode<TData> & {
   transform: string;
   isSelected?: boolean;
   isDragging?: boolean;
@@ -102,7 +103,7 @@ export type SolmuDragLine = {
 };
 
 export type SolmuElements = {
-  nodes: SolmuRenderNode[];
+  nodes: SolmuRenderNode<any>[];
   edges: SolmuRenderEdge[];
   dragLine: SolmuDragLine | null;
 };
@@ -136,7 +137,7 @@ export type RoutingConfig = {
 
 export type UseSolmuParams = {
   data: {
-    nodes: SolmuNode[];
+    nodes: SolmuNode<any>[];
     edges: Edge[];
   };
   config: {
