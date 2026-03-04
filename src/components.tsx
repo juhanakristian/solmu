@@ -1,18 +1,44 @@
 import React from "react";
-import type { SolmuCanvas as SolmuCanvasData, SolmuElements } from "./types";
+import type { SolmuCanvas as SolmuCanvasData, SolmuElements, ConnectorRendererProps } from "./types";
+
+export function DefaultConnectorRenderer({ connector, node, isHovered, onMouseDown, onMouseOver, onMouseUp, onMouseOut }: ConnectorRendererProps) {
+  const size = 2;
+  return (
+    <rect
+      x={connector.x - size / 2}
+      y={connector.y - size / 2}
+      width={size}
+      height={size}
+      rx={3}
+      ry={3}
+      fill="#64ffda"
+      style={{
+        transformBox: "fill-box",
+        transformOrigin: "50% 50%",
+        transform: isHovered ? "scale(1.5)" : undefined,
+      }}
+      onMouseDown={onMouseDown}
+      onMouseOver={onMouseOver}
+      onMouseUp={onMouseUp}
+      onMouseOut={onMouseOut}
+    />
+  );
+}
 
 export interface SolmuCanvasProps extends React.SVGProps<SVGSVGElement> {
   canvas: SolmuCanvasData;
   elements: SolmuElements;
+  connectorRenderer?: React.FC<ConnectorRendererProps>;
   children?: React.ReactNode;
 }
 
-export function SolmuCanvas({ 
-  canvas, 
-  elements, 
+export function SolmuCanvas({
+  canvas,
+  elements,
+  connectorRenderer: ConnectorRenderer = DefaultConnectorRenderer,
   children,
   style,
-  ...svgProps 
+  ...svgProps
 }: SolmuCanvasProps) {
   return (
     <svg
@@ -59,10 +85,9 @@ export function SolmuCanvas({
               <NodeComponent {...node.nodeProps} />
             </g>
             {/* Connectors stay unrotated — their positions are pre-rotated in data */}
-            {node.connectorProps.map((connectorProps) => {
-              const { key, ...rectProps } = connectorProps;
-              return <rect key={key} {...rectProps} />;
-            })}
+            {node.connectorProps.map((cp) => (
+              <ConnectorRenderer key={cp.connector.id} {...cp} />
+            ))}
           </g>
         );
       })}

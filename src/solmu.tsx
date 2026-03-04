@@ -160,27 +160,19 @@ export function useSolmu({
 
   const createConnectorProps = (node: typeof data.nodes[0]) => {
     return node.connectors?.map((connector) => {
-      const isHovered =
-        hoverConnector && hoverConnector.id === connector.id && hoverConnector.node === node.id;
-      
+      const isHovered = !!(
+        hoverConnector &&
+        hoverConnector.id === connector.id &&
+        hoverConnector.node === node.id
+      );
       return {
-        key: connector.id,
+        connector,
+        node,
+        isHovered,
         onMouseDown: () => onConnectorMouseDown(connector.id, node.id),
         onMouseOver: () => setHoverConnector({ id: connector.id, node: node.id }),
         onMouseUp: () => onConnectorMouseUp(connector.id, node.id),
         onMouseOut: () => setHoverConnector(null),
-        style: {
-          transformBox: "fill-box" as const,
-          transformOrigin: "50% 50%",
-          transform: isHovered ? "scale(1.5)" : undefined,
-        },
-        x: connector.x - 1,
-        y: connector.y - 1,
-        rx: 3,
-        ry: 3,
-        width: 2,
-        height: 2,
-        fill: "#64ffda",
       };
     }) || [];
   };

@@ -1,5 +1,5 @@
 import React from "react";
-import { useSolmu, SolmuCanvas } from "../../../src";
+import { useSolmu, SolmuCanvas, DefaultConnectorRenderer } from "../../../src";
 import type { Edge } from "../../../src/types";
 
 // --- UML Class Box Renderer ---
@@ -264,10 +264,9 @@ function UMLCanvas({
             <g transform={node.rotation ? `rotate(${node.rotation})` : undefined}>
               <NodeComponent {...node.nodeProps} />
             </g>
-            {node.connectorProps.map((cp: any) => {
-              const { key, ...rest } = cp;
-              return <rect key={key} {...rest} fill="#000" />;
-            })}
+            {node.connectorProps.map((cp: any) => (
+              <DefaultConnectorRenderer key={cp.connector.id} {...cp} />
+            ))}
           </g>
         );
       })}

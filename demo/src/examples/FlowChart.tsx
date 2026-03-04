@@ -1,5 +1,5 @@
 import React from "react";
-import { useSolmu } from "../../../src";
+import { useSolmu, DefaultConnectorRenderer } from "../../../src";
 import type { Edge } from "../../../src/types";
 
 // --- Flowchart shape renderers ---
@@ -234,10 +234,9 @@ function FlowChartCanvas({
                 </text>
               ))}
             </g>
-            {node.connectorProps.map((cp: any) => {
-              const { key, ...rest } = cp;
-              return <rect key={key} {...rest} fill="#546e7a" />;
-            })}
+            {node.connectorProps.map((cp: any) => (
+              <DefaultConnectorRenderer key={cp.connector.id} {...cp} />
+            ))}
           </g>
         );
       })}

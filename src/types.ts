@@ -71,27 +71,23 @@ export type SolmuCanvas = {
   };
 };
 
+export type ConnectorRendererProps = {
+  connector: Connector;
+  node: SolmuNode<any>;
+  isHovered: boolean;
+  onMouseDown: () => void;
+  onMouseOver: () => void;
+  onMouseUp: () => void;
+  onMouseOut: () => void;
+};
+
 export type SolmuRenderNode<TData = unknown> = SolmuNode<TData> & {
   transform: string;
   isSelected?: boolean;
   isDragging?: boolean;
   renderer: React.FC<NodeRendererProps<any>>;
   nodeProps: NodeRendererProps<TData>;
-  connectorProps: Array<{
-    key: string;
-    onMouseDown: () => void;
-    onMouseOver: () => void;
-    onMouseUp: () => void;
-    onMouseOut: () => void;
-    style: React.CSSProperties;
-    x: number;
-    y: number;
-    rx: number;
-    ry: number;
-    width: number;
-    height: number;
-    fill: string;
-  }>;
+  connectorProps: ConnectorRendererProps[];
 };
 
 export type SolmuRenderEdge = Edge & {
@@ -165,6 +161,7 @@ export type UseSolmuParams = {
       };
     };
     routing?: RoutingConfig;
+    connectorRenderer?: React.FC<ConnectorRendererProps>;
     connections?: {
       validateOnCreate?: boolean;
       validateOnMove?: boolean;
