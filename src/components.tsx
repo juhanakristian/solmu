@@ -23,6 +23,7 @@ export function SolmuCanvas({
         background: "#0d1117",
         width: "100%",
         height: "100%",
+        userSelect: "none",
         ...style,
       }}
     >

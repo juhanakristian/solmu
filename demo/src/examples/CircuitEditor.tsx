@@ -1,6 +1,6 @@
 import React from "react";
-import { useSolmu, SolmuCanvas } from "../../src";
-import type { Edge } from "../../src/types";
+import { useSolmu, SolmuCanvas } from "../../../src";
+import type { Edge } from "../../../src/types";
 
 // --- Electronic Component Symbols ---
 
@@ -278,6 +278,7 @@ export default function App() {
       margin: 3,
       gridSize: 2.54,
       cornerRadius: 0,
+      stubLength: 3,
     },
   };
 

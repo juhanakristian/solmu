@@ -19,6 +19,7 @@ export interface InternalRoutingConfig {
   margin: number;         // Margin around obstacles
   gridSize: number;       // Grid cell size for pathfinding
   cornerRadius?: number;  // For bezier mode - radius of corner curves
+  stubLength?: number;    // Min distance from node before first turn (default: 0)
 }
 
 export interface NodeBounds {
@@ -35,16 +36,27 @@ const DEFAULT_NODE_HEIGHT = 5;
  */
 export function getNodeBounds(
   nodes: SolmuNode[],
-  excludeNodes?: string[]
+  excludeNodes?: string[],
+  defaultDimensions?: { width?: number; height?: number }
 ): NodeBounds[] {
   const excluded = new Set(excludeNodes || []);
+  const defW = defaultDimensions?.width ?? DEFAULT_NODE_WIDTH;
+  const defH = defaultDimensions?.height ?? DEFAULT_NODE_HEIGHT;
 
   return nodes
     .filter(node => !excluded.has(node.id))
     .map(node => {
-      // For now, use default dimensions - could be extended to read from node type config
-      const width = DEFAULT_NODE_WIDTH;
-      const height = DEFAULT_NODE_HEIGHT;
+      // Infer dimensions from connector spread, falling back to defaults
+      let width = defW;
+      let height = defH;
+      if (node.connectors && node.connectors.length > 1) {
+        const xs = node.connectors.map(c => c.x);
+        const ys = node.connectors.map(c => c.y);
+        const spanX = Math.max(...xs) - Math.min(...xs);
+        const spanY = Math.max(...ys) - Math.min(...ys);
+        width = Math.max(defW, spanX + 4);
+        height = Math.max(defH, spanY + 4);
+      }
 
       return {
         id: node.id,
@@ -399,7 +411,16 @@ function pathToOrthogonalSVG(path: Point[]): string {
   let d = `M${path[0].x},${path[0].y}`;
 
   for (let i = 1; i < path.length; i++) {
-    d += ` L${path[i].x},${path[i].y}`;
+    const prev = path[i - 1];
+    const curr = path[i];
+
+    // If the segment is already axis-aligned, draw directly
+    if (prev.x === curr.x || prev.y === curr.y) {
+      d += ` L${curr.x},${curr.y}`;
+    } else {
+      // Insert a mid-point to make it orthogonal (horizontal first, then vertical)
+      d += ` L${curr.x},${prev.y} L${curr.x},${curr.y}`;
+    }
   }
 
   return d;
@@ -506,30 +527,89 @@ function directBezierSVG(start: Point, end: Point): string {
 }
 
 /**
+ * Infer departure direction from a connector offset relative to its node center.
+ * Returns a unit vector pointing outward from the node.
+ */
+function inferDirection(connectorOffset: Point): Point {
+  const { x, y } = connectorOffset;
+  // Pick the dominant axis
+  if (Math.abs(x) > Math.abs(y)) {
+    return { x: x > 0 ? 1 : -1, y: 0 };
+  } else if (Math.abs(y) > Math.abs(x)) {
+    return { x: 0, y: y > 0 ? 1 : -1 };
+  }
+  // Diagonal or zero — default to rightward
+  return { x: x >= 0 ? 1 : -1, y: 0 };
+}
+
+/**
  * Main routing function - calculates path avoiding obstacles
+ *
+ * sourceOffset / targetOffset are the connector positions relative to their
+ * node centers. When provided together with a non-zero stubLength, a straight
+ * stub segment is emitted from each endpoint before routing begins.
  */
 export function calculateRoute(
   start: Point,
   end: Point,
   obstacles: NodeBounds[],
-  config: InternalRoutingConfig
+  config: InternalRoutingConfig,
+  sourceOffset?: Point,
+  targetOffset?: Point,
 ): string {
-  const { mode, cornerRadius = 5 } = config;
+  const { mode, cornerRadius = 5, stubLength = 0 } = config;
 
   // Direct mode - no obstacle avoidance
   if (mode === 'direct') {
     return directBezierSVG(start, end);
   }
 
+  // Compute stub endpoints if stubLength is set
+  let routeStart = start;
+  let routeEnd = end;
+  let startStub: Point | null = null;
+  let endStub: Point | null = null;
+
+  if (stubLength > 0 && sourceOffset) {
+    const dir = inferDirection(sourceOffset);
+    startStub = { x: start.x + dir.x * stubLength, y: start.y + dir.y * stubLength };
+    routeStart = startStub;
+  }
+  if (stubLength > 0 && targetOffset) {
+    const dir = inferDirection(targetOffset);
+    endStub = { x: end.x + dir.x * stubLength, y: end.y + dir.y * stubLength };
+    routeEnd = endStub;
+  }
+
   // Find path using A*
-  const path = findPathAStar(start, end, obstacles, config);
+  const path = findPathAStar(routeStart, routeEnd, obstacles, config);
 
   if (!path || path.length === 0) {
+    // Fallback: still include stubs even on direct fallback
+    if (startStub || endStub) {
+      const pts: Point[] = [start];
+      if (startStub) pts.push(startStub);
+      if (endStub) pts.push(endStub);
+      pts.push(end);
+      if (mode === 'orthogonal') return pathToOrthogonalSVG(pts);
+    }
     return directBezierSVG(start, end);
   }
 
   // Simplify the path
-  const simplified = simplifyPath(path);
+  let simplified = simplifyPath(path);
+
+  // Prepend / append stub segments
+  if (startStub) {
+    simplified = [start, ...simplified];
+  } else {
+    simplified[0] = start;
+  }
+  if (endStub) {
+    simplified = [...simplified, end];
+  } else {
+    simplified[simplified.length - 1] = end;
+  }
 
   // Convert to SVG based on mode
   if (mode === 'orthogonal') {
