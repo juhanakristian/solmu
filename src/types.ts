@@ -37,9 +37,15 @@ export type Edge = {
   type: EdgeType;
 };
 
+export type NodeRendererProps<TData = unknown> = {
+  node: SolmuNode<TData>;
+  onMouseDown: (e: React.MouseEvent) => void;
+  onMouseUp: (e: React.MouseEvent) => void;
+};
+
 export type NodeRenderer = {
   type: string;
-  component: React.FC;
+  component: React.FC<NodeRendererProps<any>>;
 };
 
 export type ConnectFunc = (
@@ -69,11 +75,8 @@ export type SolmuRenderNode<TData = unknown> = SolmuNode<TData> & {
   transform: string;
   isSelected?: boolean;
   isDragging?: boolean;
-  renderer: React.FC<any>;
-  nodeProps: {
-    onMouseDown: (e: React.MouseEvent) => void;
-    onMouseUp: (e: React.MouseEvent) => void;
-  };
+  renderer: React.FC<NodeRendererProps<any>>;
+  nodeProps: NodeRendererProps<TData>;
   connectorProps: Array<{
     key: string;
     onMouseDown: () => void;

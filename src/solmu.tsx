@@ -153,6 +153,7 @@ export function useSolmu({
 
   // Helper functions for rendering
   const createNodeProps = (node: typeof data.nodes[0]) => ({
+    node,
     onMouseDown: (e: React.MouseEvent) => onMouseDown(e, node.id),
     onMouseUp,
   });

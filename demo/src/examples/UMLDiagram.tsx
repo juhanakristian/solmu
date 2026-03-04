@@ -110,10 +110,8 @@ function measureClass(info: ClassInfo) {
   return { width, height, headerH, attrH, methodH };
 }
 
-function UMLClassBox(props: any) {
-  // The node ID is not directly available via props, so we use a context.
-  const nodeId = React.useContext(NodeIdContext);
-  const info = CLASS_DATA[nodeId];
+function UMLClassBox({ node, ...props }: any) {
+  const info = CLASS_DATA[node.id];
   if (!info) {
     return <rect {...props} width={20} height={10} fill="#fff" stroke="#333" />;
   }
@@ -215,10 +213,6 @@ function UMLClassBox(props: any) {
   );
 }
 
-// Context to pass node ID to the renderer
-const NodeIdContext = React.createContext<string>("");
-
-// Wrapper component around SolmuCanvas that provides node ID context per node
 function UMLCanvas({
   canvas,
   elements,
@@ -262,21 +256,19 @@ function UMLCanvas({
         />
       ))}
 
-      {/* Nodes with ID context */}
+      {/* Nodes */}
       {elements.nodes.map((node: any) => {
         const NodeComponent = node.renderer;
         return (
-          <NodeIdContext.Provider key={node.id} value={node.id}>
-            <g transform={node.transform}>
-              <g transform={node.rotation ? `rotate(${node.rotation})` : undefined}>
-                <NodeComponent {...node.nodeProps} />
-              </g>
-              {node.connectorProps.map((cp: any) => {
-                const { key, ...rest } = cp;
-                return <rect key={key} {...rest} fill="#000" />;
-              })}
+          <g key={node.id} transform={node.transform}>
+            <g transform={node.rotation ? `rotate(${node.rotation})` : undefined}>
+              <NodeComponent {...node.nodeProps} />
             </g>
-          </NodeIdContext.Provider>
+            {node.connectorProps.map((cp: any) => {
+              const { key, ...rest } = cp;
+              return <rect key={key} {...rest} fill="#000" />;
+            })}
+          </g>
         );
       })}
 
