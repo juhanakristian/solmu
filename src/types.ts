@@ -105,6 +105,8 @@ export type SolmuRenderNode<TData = unknown> = SolmuNode<TData> & {
 export type SolmuRenderEdge = Edge & {
   id: string;
   path: string;
+  labelPoint: { x: number; y: number };
+  labelAngle: number;
   isSelected?: boolean;
 };
 

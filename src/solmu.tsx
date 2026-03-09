@@ -191,14 +191,16 @@ export function useSolmu({
     ? []
     : getNodeBounds(data.nodes, undefined, config.routing?.nodeDimensions);
 
-  const createEdgePath = (edge: typeof data.edges[0]) => {
+  const createEdgeRoute = (edge: typeof data.edges[0]) => {
+    const fallback = { path: "", labelPoint: { x: 0, y: 0 }, labelAngle: 0 };
+
     const source = data.nodes.find((n) => n.id === edge.source.node);
     const target = data.nodes.find((n) => n.id === edge.target.node);
-    if (!source || !target) return "";
+    if (!source || !target) return fallback;
 
     const sc = source.connectors?.find((c) => c.id === edge.source.connector);
     const tc = target.connectors?.find((c) => c.id === edge.target.connector);
-    if (!sc || !tc) return "";
+    if (!sc || !tc) return fallback;
 
     const x1 = source.x + sc.x;
     const y1 = source.y + sc.y;
@@ -210,7 +212,11 @@ export function useSolmu({
 
     // Legacy "line" type - simple direct line
     if (edge.type === "line") {
-      return `M${x1},${y1} L ${x2},${y2}`;
+      return {
+        path: `M${x1},${y1} L ${x2},${y2}`,
+        labelPoint: { x: (x1 + x2) / 2, y: (y1 + y2) / 2 },
+        labelAngle: Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI),
+      };
     }
 
     // Determine routing mode based on edge type
@@ -228,11 +234,7 @@ export function useSolmu({
       (ob) => ob.id !== source.id && ob.id !== target.id
     );
 
-    // Use routing algorithm
-    return calculateRoute(start, end, obstacles, {
-      ...routingConfig,
-      mode,
-    }, sc, tc);
+    return calculateRoute(start, end, obstacles, { ...routingConfig, mode }, sc, tc);
   };
 
   return {
@@ -269,11 +271,16 @@ export function useSolmu({
           isDragging: dragItem === node.id,
         };
       }),
-      edges: data.edges.map((edge, index) => ({
-        ...edge,
-        id: `${edge.source.node}-${edge.target.node}-${index}`,
-        path: createEdgePath(edge),
-      })),
+      edges: data.edges.map((edge, index) => {
+        const { path, labelPoint, labelAngle } = createEdgeRoute(edge);
+        return {
+          ...edge,
+          id: `${edge.source.node}-${edge.target.node}-${index}`,
+          path,
+          labelPoint,
+          labelAngle,
+        };
+      }),
       dragLine: dragConnector && dragLine
         ? {
             path: `M${dragLine.x1},${dragLine.y1} C ${dragLine.cx1},${dragLine.cy1} ${dragLine.cx2},${dragLine.cy2} ${dragLine.x2},${dragLine.y2}`,
