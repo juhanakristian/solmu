@@ -14,6 +14,12 @@ export interface Rectangle {
 
 export type RoutingMode = 'orthogonal' | 'bezier' | 'direct';
 
+export interface RouteResult {
+  path: string;
+  labelPoint: Point;
+  labelAngle: number; // degrees, tangent direction at label point
+}
+
 export interface InternalRoutingConfig {
   mode: RoutingMode;
   margin: number;         // Margin around obstacles
@@ -35,7 +41,7 @@ const DEFAULT_NODE_HEIGHT = 5;
  * Extract bounding boxes from nodes for obstacle detection
  */
 export function getNodeBounds(
-  nodes: SolmuNode[],
+  nodes: SolmuNode<any>[],
   excludeNodes?: string[],
   defaultDimensions?: { width?: number; height?: number }
 ): NodeBounds[] {
@@ -500,30 +506,81 @@ function pathToBezierSVG(path: Point[], cornerRadius: number = 5): string {
 /**
  * Create a simple direct bezier curve between two points
  */
-function directBezierSVG(start: Point, end: Point): string {
+function directBezierResult(start: Point, end: Point): RouteResult {
   const dx = end.x - start.x;
   const dy = end.y - start.y;
-
-  // Determine control point positioning based on direction
-  // For horizontal-ish connections, use horizontal control points
-  // For vertical-ish connections, use vertical control points
   const isHorizontal = Math.abs(dx) > Math.abs(dy);
 
   let cx1, cy1, cx2, cy2;
-
   if (isHorizontal) {
-    cx1 = start.x + dx * 0.4;
-    cy1 = start.y;
-    cx2 = end.x - dx * 0.4;
-    cy2 = end.y;
+    cx1 = start.x + dx * 0.4; cy1 = start.y;
+    cx2 = end.x - dx * 0.4;   cy2 = end.y;
   } else {
-    cx1 = start.x;
-    cy1 = start.y + dy * 0.4;
-    cx2 = end.x;
-    cy2 = end.y - dy * 0.4;
+    cx1 = start.x; cy1 = start.y + dy * 0.4;
+    cx2 = end.x;   cy2 = end.y - dy * 0.4;
   }
 
-  return `M${start.x},${start.y} C${cx1},${cy1} ${cx2},${cy2} ${end.x},${end.y}`;
+  const path = `M${start.x},${start.y} C${cx1},${cy1} ${cx2},${cy2} ${end.x},${end.y}`;
+  const { point: labelPoint, angle: labelAngle } = cubicBezierMidpoint(
+    start, { x: cx1, y: cy1 }, { x: cx2, y: cy2 }, end
+  );
+  return { path, labelPoint, labelAngle };
+}
+
+/**
+ * Walk a polyline and return the point and tangent angle at its midpoint by arc length.
+ */
+function midpointOfPolyline(points: Point[]): { point: Point; angle: number } {
+  if (points.length === 1) return { point: points[0], angle: 0 };
+
+  const lengths: number[] = [];
+  let totalLength = 0;
+  for (let i = 1; i < points.length; i++) {
+    const dx = points[i].x - points[i - 1].x;
+    const dy = points[i].y - points[i - 1].y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    lengths.push(len);
+    totalLength += len;
+  }
+
+  const half = totalLength / 2;
+  let walked = 0;
+  for (let i = 0; i < lengths.length; i++) {
+    if (walked + lengths[i] >= half) {
+      const t = lengths[i] === 0 ? 0 : (half - walked) / lengths[i];
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      return {
+        point: { x: p1.x + t * (p2.x - p1.x), y: p1.y + t * (p2.y - p1.y) },
+        angle: Math.atan2(p2.y - p1.y, p2.x - p1.x) * (180 / Math.PI),
+      };
+    }
+    walked += lengths[i];
+  }
+
+  const last = points[points.length - 1];
+  const prev = points[points.length - 2];
+  return {
+    point: last,
+    angle: Math.atan2(last.y - prev.y, last.x - prev.x) * (180 / Math.PI),
+  };
+}
+
+/**
+ * Point and tangent angle on a cubic bezier at parameter t (0–1).
+ */
+function cubicBezierMidpoint(
+  p1: Point, c1: Point, c2: Point, p2: Point, t = 0.5
+): { point: Point; angle: number } {
+  const mt = 1 - t;
+  const point = {
+    x: mt * mt * mt * p1.x + 3 * mt * mt * t * c1.x + 3 * mt * t * t * c2.x + t * t * t * p2.x,
+    y: mt * mt * mt * p1.y + 3 * mt * mt * t * c1.y + 3 * mt * t * t * c2.y + t * t * t * p2.y,
+  };
+  // Tangent = derivative of cubic bezier
+  const tx = 3 * mt * mt * (c1.x - p1.x) + 6 * mt * t * (c2.x - c1.x) + 3 * t * t * (p2.x - c2.x);
+  const ty = 3 * mt * mt * (c1.y - p1.y) + 6 * mt * t * (c2.y - c1.y) + 3 * t * t * (p2.y - c2.y);
+  return { point, angle: Math.atan2(ty, tx) * (180 / Math.PI) };
 }
 
 /**
@@ -556,12 +613,12 @@ export function calculateRoute(
   config: InternalRoutingConfig,
   sourceOffset?: Point,
   targetOffset?: Point,
-): string {
+): RouteResult {
   const { mode, cornerRadius = 5, stubLength = 0 } = config;
 
   // Direct mode - no obstacle avoidance
   if (mode === 'direct') {
-    return directBezierSVG(start, end);
+    return directBezierResult(start, end);
   }
 
   // Compute stub endpoints if stubLength is set
@@ -582,22 +639,25 @@ export function calculateRoute(
   }
 
   // Find path using A*
-  const path = findPathAStar(routeStart, routeEnd, obstacles, config);
+  const astarPath = findPathAStar(routeStart, routeEnd, obstacles, config);
 
-  if (!path || path.length === 0) {
+  if (!astarPath || astarPath.length === 0) {
     // Fallback: still include stubs even on direct fallback
     if (startStub || endStub) {
       const pts: Point[] = [start];
       if (startStub) pts.push(startStub);
       if (endStub) pts.push(endStub);
       pts.push(end);
-      if (mode === 'orthogonal') return pathToOrthogonalSVG(pts);
+      if (mode === 'orthogonal') {
+        const { point: labelPoint, angle: labelAngle } = midpointOfPolyline(pts);
+        return { path: pathToOrthogonalSVG(pts), labelPoint, labelAngle };
+      }
     }
-    return directBezierSVG(start, end);
+    return directBezierResult(start, end);
   }
 
   // Simplify the path
-  let simplified = simplifyPath(path);
+  let simplified = simplifyPath(astarPath);
 
   // Prepend / append stub segments
   if (startStub) {
@@ -611,11 +671,13 @@ export function calculateRoute(
     simplified[simplified.length - 1] = end;
   }
 
+  const { point: labelPoint, angle: labelAngle } = midpointOfPolyline(simplified);
+
   // Convert to SVG based on mode
   if (mode === 'orthogonal') {
-    return pathToOrthogonalSVG(simplified);
+    return { path: pathToOrthogonalSVG(simplified), labelPoint, labelAngle };
   } else {
-    return pathToBezierSVG(simplified, cornerRadius);
+    return { path: pathToBezierSVG(simplified, cornerRadius), labelPoint, labelAngle };
   }
 }
 

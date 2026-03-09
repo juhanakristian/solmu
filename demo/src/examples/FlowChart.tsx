@@ -1,5 +1,5 @@
 import React from "react";
-import { useSolmu } from "../../../src";
+import { useSolmu, DefaultConnectorRenderer } from "../../../src";
 import type { Edge } from "../../../src/types";
 
 // --- Flowchart shape renderers ---
@@ -17,7 +17,7 @@ const COLORS = {
 };
 
 // Start / End (rounded rectangle)
-function Terminal(props: any) {
+function Terminal({ node, ...props }: any) {
   const w = 28;
   const h = 10;
   return (
@@ -35,7 +35,7 @@ function Terminal(props: any) {
 }
 
 // Process (rectangle)
-function Process(props: any) {
+function Process({ node, ...props }: any) {
   const w = 32;
   const h = 12;
   return (
@@ -53,7 +53,7 @@ function Process(props: any) {
 }
 
 // Decision (diamond)
-function Decision(props: any) {
+function Decision({ node, ...props }: any) {
   const s = 10; // half-size
   return (
     <g {...props}>
@@ -70,7 +70,7 @@ function Decision(props: any) {
 }
 
 // I/O (parallelogram)
-function IOBlock(props: any) {
+function IOBlock({ node, ...props }: any) {
   const w = 30;
   const h = 10;
   const skew = 4;
@@ -234,10 +234,9 @@ function FlowChartCanvas({
                 </text>
               ))}
             </g>
-            {node.connectorProps.map((cp: any) => {
-              const { key, ...rest } = cp;
-              return <rect key={key} {...rest} fill="#546e7a" />;
-            })}
+            {node.connectorProps.map((cp: any) => (
+              <DefaultConnectorRenderer key={cp.connector.id} {...cp} />
+            ))}
           </g>
         );
       })}

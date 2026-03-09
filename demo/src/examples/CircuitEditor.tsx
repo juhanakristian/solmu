@@ -4,7 +4,7 @@ import type { Edge } from "../../../src/types";
 
 // --- Electronic Component Symbols ---
 
-function Resistor(props: any) {
+function Resistor({ node, ...props }: any) {
   return (
     <g {...props}>
       <rect x={-6} y={-2} width={12} height={4} fill="transparent" />
@@ -20,7 +20,7 @@ function Resistor(props: any) {
   );
 }
 
-function Capacitor(props: any) {
+function Capacitor({ node, ...props }: any) {
   return (
     <g {...props}>
       <rect x={-6} y={-3} width={12} height={6} fill="transparent" />
@@ -32,7 +32,7 @@ function Capacitor(props: any) {
   );
 }
 
-function OpAmp(props: any) {
+function OpAmp({ node, ...props }: any) {
   return (
     <g {...props}>
       <rect x={-8} y={-5.5} width={16} height={11} fill="transparent" />
@@ -52,7 +52,7 @@ function OpAmp(props: any) {
   );
 }
 
-function Ground(props: any) {
+function Ground({ node, ...props }: any) {
   return (
     <g {...props}>
       <rect x={-3.5} y={-2.5} width={7} height={5.5} fill="transparent" />
@@ -64,7 +64,7 @@ function Ground(props: any) {
   );
 }
 
-function VoltageSource(props: any) {
+function VoltageSource({ node, ...props }: any) {
   return (
     <g {...props}>
       <rect x={-3.5} y={-5.5} width={7} height={11} fill="transparent" />

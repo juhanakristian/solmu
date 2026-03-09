@@ -31,7 +31,8 @@ export type ViewportConfig = {
 
   // Grid settings
   grid?: {
-    size: number; // in world units
+    size: number;      // visual grid spacing in world units
+    snapSize?: number; // snap resolution in world units (defaults to size)
     visible: boolean;
     snap: boolean;
   };
@@ -145,7 +146,10 @@ export class SolmuViewport {
     return baseGridSize * multiplier;
   }
 
-  // Snap point to grid if enabled (using adaptive grid size)
+  // Snap point to grid if enabled.
+  // Always snaps to a fixed world-space resolution (grid.snapSize ?? grid.size),
+  // independent of zoom level. The visual grid density (generateGridDots) may
+  // differ from the snap resolution.
   snapToGrid(worldPoint: Point2D): Point2D {
     const { grid } = this.#config;
 
@@ -153,13 +157,11 @@ export class SolmuViewport {
       return worldPoint;
     }
 
-    const effectiveGridSize = this.getEffectiveGridSize();
-    const snappedX =
-      Math.round(worldPoint.x / effectiveGridSize) * effectiveGridSize;
-    const snappedY =
-      Math.round(worldPoint.y / effectiveGridSize) * effectiveGridSize;
-
-    return { x: snappedX, y: snappedY };
+    const snapSize = grid.snapSize ?? grid.size;
+    return {
+      x: Math.round(worldPoint.x / snapSize) * snapSize,
+      y: Math.round(worldPoint.y / snapSize) * snapSize,
+    };
   }
 
   // Convert units (for display)

@@ -1,5 +1,5 @@
 import React from "react";
-import { useSolmu, SolmuCanvas } from "../../../src";
+import { useSolmu, SolmuCanvas, DefaultConnectorRenderer, SolmuMarkerDefs, DefaultEdgeRenderer } from "../../../src";
 import type { Edge } from "../../../src/types";
 
 // --- UML Class Box Renderer ---
@@ -110,10 +110,8 @@ function measureClass(info: ClassInfo) {
   return { width, height, headerH, attrH, methodH };
 }
 
-function UMLClassBox(props: any) {
-  // The node ID is not directly available via props, so we use a context.
-  const nodeId = React.useContext(NodeIdContext);
-  const info = CLASS_DATA[nodeId];
+function UMLClassBox({ node, ...props }: any) {
+  const info = CLASS_DATA[node.id];
   if (!info) {
     return <rect {...props} width={20} height={10} fill="#fff" stroke="#333" />;
   }
@@ -215,10 +213,6 @@ function UMLClassBox(props: any) {
   );
 }
 
-// Context to pass node ID to the renderer
-const NodeIdContext = React.createContext<string>("");
-
-// Wrapper component around SolmuCanvas that provides node ID context per node
 function UMLCanvas({
   canvas,
   elements,
@@ -242,6 +236,8 @@ function UMLCanvas({
         ...style,
       }}
     >
+      <SolmuMarkerDefs edges={elements.edges} />
+
       {/* Grid dots */}
       {canvas.gridDots?.map((dot: any, i: number) => (
         <circle
@@ -253,30 +249,21 @@ function UMLCanvas({
 
       {/* Edges */}
       {elements.edges.map((edge: any) => (
-        <path
-          key={edge.id}
-          d={edge.path}
-          fill="none"
-          stroke="#5d4037"
-          strokeWidth={0.3}
-        />
+        <DefaultEdgeRenderer key={edge.id} edge={edge} />
       ))}
 
-      {/* Nodes with ID context */}
+      {/* Nodes */}
       {elements.nodes.map((node: any) => {
         const NodeComponent = node.renderer;
         return (
-          <NodeIdContext.Provider key={node.id} value={node.id}>
-            <g transform={node.transform}>
-              <g transform={node.rotation ? `rotate(${node.rotation})` : undefined}>
-                <NodeComponent {...node.nodeProps} />
-              </g>
-              {node.connectorProps.map((cp: any) => {
-                const { key, ...rest } = cp;
-                return <rect key={key} {...rest} fill="#000" />;
-              })}
+          <g key={node.id} transform={node.transform}>
+            <g transform={node.rotation ? `rotate(${node.rotation})` : undefined}>
+              <NodeComponent {...node.nodeProps} />
             </g>
-          </NodeIdContext.Provider>
+            {node.connectorProps.map((cp: any) => (
+              <DefaultConnectorRenderer key={cp.connector.id} {...cp} />
+            ))}
+          </g>
         );
       })}
 
@@ -352,35 +339,40 @@ export default function UMLDiagramApp() {
       { id: "CreditCard", x: 90, y: 20, type: "uml-class", connectors: computeConnectors("CreditCard") },
     ],
     edges: [
-      // User 1---* Order
+      // User 1---* Order (association)
       {
         source: { node: "User", connector: "User-right" },
         target: { node: "Order", connector: "Order-left" },
         type: "orthogonal",
+        style: { stroke: "#5d4037", strokeWidth: 0.3, markerEnd: "arrow-open" },
       } as Edge,
-      // Order 1---* OrderItem
+      // Order 1---* OrderItem (association)
       {
         source: { node: "Order", connector: "Order-bottom" },
         target: { node: "OrderItem", connector: "OrderItem-top" },
         type: "orthogonal",
+        style: { stroke: "#5d4037", strokeWidth: 0.3, markerEnd: "arrow-open" },
       } as Edge,
-      // OrderItem *---1 Product
+      // OrderItem *---1 Product (association)
       {
         source: { node: "OrderItem", connector: "OrderItem-left" },
         target: { node: "Product", connector: "Product-right" },
         type: "orthogonal",
+        style: { stroke: "#5d4037", strokeWidth: 0.3, markerEnd: "arrow-open" },
       } as Edge,
-      // Order ----> PaymentMethod (uses)
+      // Order ----> PaymentMethod (uses / dependency)
       {
         source: { node: "Order", connector: "Order-right" },
         target: { node: "PaymentMethod", connector: "PaymentMethod-left" },
         type: "orthogonal",
+        style: { stroke: "#5d4037", strokeWidth: 0.3, strokeDasharray: "2 1", markerEnd: "arrow-open" },
       } as Edge,
       // CreditCard --|> PaymentMethod (implements)
       {
         source: { node: "CreditCard", connector: "CreditCard-top" },
         target: { node: "PaymentMethod", connector: "PaymentMethod-bottom" },
         type: "orthogonal",
+        style: { stroke: "#5d4037", strokeWidth: 0.3, strokeDasharray: "2 1", markerEnd: "arrow" },
       } as Edge,
     ],
   });

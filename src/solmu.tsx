@@ -153,33 +153,26 @@ export function useSolmu({
 
   // Helper functions for rendering
   const createNodeProps = (node: typeof data.nodes[0]) => ({
+    node,
     onMouseDown: (e: React.MouseEvent) => onMouseDown(e, node.id),
     onMouseUp,
   });
 
   const createConnectorProps = (node: typeof data.nodes[0]) => {
     return node.connectors?.map((connector) => {
-      const isHovered =
-        hoverConnector && hoverConnector.id === connector.id && hoverConnector.node === node.id;
-      
+      const isHovered = !!(
+        hoverConnector &&
+        hoverConnector.id === connector.id &&
+        hoverConnector.node === node.id
+      );
       return {
-        key: connector.id,
+        connector,
+        node,
+        isHovered,
         onMouseDown: () => onConnectorMouseDown(connector.id, node.id),
         onMouseOver: () => setHoverConnector({ id: connector.id, node: node.id }),
         onMouseUp: () => onConnectorMouseUp(connector.id, node.id),
         onMouseOut: () => setHoverConnector(null),
-        style: {
-          transformBox: "fill-box" as const,
-          transformOrigin: "50% 50%",
-          transform: isHovered ? "scale(1.5)" : undefined,
-        },
-        x: connector.x - 1,
-        y: connector.y - 1,
-        rx: 3,
-        ry: 3,
-        width: 2,
-        height: 2,
-        fill: "#64ffda",
       };
     }) || [];
   };
@@ -198,14 +191,16 @@ export function useSolmu({
     ? []
     : getNodeBounds(data.nodes, undefined, config.routing?.nodeDimensions);
 
-  const createEdgePath = (edge: typeof data.edges[0]) => {
+  const createEdgeRoute = (edge: typeof data.edges[0]) => {
+    const fallback = { path: "", labelPoint: { x: 0, y: 0 }, labelAngle: 0 };
+
     const source = data.nodes.find((n) => n.id === edge.source.node);
     const target = data.nodes.find((n) => n.id === edge.target.node);
-    if (!source || !target) return "";
+    if (!source || !target) return fallback;
 
     const sc = source.connectors?.find((c) => c.id === edge.source.connector);
     const tc = target.connectors?.find((c) => c.id === edge.target.connector);
-    if (!sc || !tc) return "";
+    if (!sc || !tc) return fallback;
 
     const x1 = source.x + sc.x;
     const y1 = source.y + sc.y;
@@ -217,7 +212,11 @@ export function useSolmu({
 
     // Legacy "line" type - simple direct line
     if (edge.type === "line") {
-      return `M${x1},${y1} L ${x2},${y2}`;
+      return {
+        path: `M${x1},${y1} L ${x2},${y2}`,
+        labelPoint: { x: (x1 + x2) / 2, y: (y1 + y2) / 2 },
+        labelAngle: Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI),
+      };
     }
 
     // Determine routing mode based on edge type
@@ -235,11 +234,7 @@ export function useSolmu({
       (ob) => ob.id !== source.id && ob.id !== target.id
     );
 
-    // Use routing algorithm
-    return calculateRoute(start, end, obstacles, {
-      ...routingConfig,
-      mode,
-    }, sc, tc);
+    return calculateRoute(start, end, obstacles, { ...routingConfig, mode }, sc, tc);
   };
 
   return {
@@ -276,11 +271,16 @@ export function useSolmu({
           isDragging: dragItem === node.id,
         };
       }),
-      edges: data.edges.map((edge, index) => ({
-        ...edge,
-        id: `${edge.source.node}-${edge.target.node}-${index}`,
-        path: createEdgePath(edge),
-      })),
+      edges: data.edges.map((edge, index) => {
+        const { path, labelPoint, labelAngle } = createEdgeRoute(edge);
+        return {
+          ...edge,
+          id: `${edge.source.node}-${edge.target.node}-${index}`,
+          path,
+          labelPoint,
+          labelAngle,
+        };
+      }),
       dragLine: dragConnector && dragLine
         ? {
             path: `M${dragLine.x1},${dragLine.y1} C ${dragLine.cx1},${dragLine.cy1} ${dragLine.cx2},${dragLine.cy2} ${dragLine.x2},${dragLine.y2}`,

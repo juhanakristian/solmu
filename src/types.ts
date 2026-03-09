@@ -14,13 +14,14 @@ export type Connector = {
 // Legacy connector type for backward compatibility
 // New port system is in ports.ts
 
-export type SolmuNode = {
+export type SolmuNode<TData = unknown> = {
   id: string;
   x: number;
   y: number;
   rotation?: number;
   connectors?: Connector[];
   type: string;
+  data?: TData;
 };
 
 export type EdgeNode = {
@@ -30,15 +31,33 @@ export type EdgeNode = {
 
 export type EdgeType = "bezier" | "orthogonal" | "line" | "direct";
 
+export type EdgeMarker = "arrow" | "arrow-open" | (string & {});
+
+export type EdgeStyle = {
+  stroke?: string;
+  strokeWidth?: number;
+  strokeDasharray?: string;
+  opacity?: number;
+  markerStart?: EdgeMarker;
+  markerEnd?: EdgeMarker;
+};
+
 export type Edge = {
   source: EdgeNode;
   target: EdgeNode;
   type: EdgeType;
+  style?: EdgeStyle;
+};
+
+export type NodeRendererProps<TData = unknown> = {
+  node: SolmuNode<TData>;
+  onMouseDown: (e: React.MouseEvent) => void;
+  onMouseUp: (e: React.MouseEvent) => void;
 };
 
 export type NodeRenderer = {
   type: string;
-  component: React.FC;
+  component: React.FC<NodeRendererProps<any>>;
 };
 
 export type ConnectFunc = (
@@ -64,36 +83,35 @@ export type SolmuCanvas = {
   };
 };
 
-export type SolmuRenderNode = SolmuNode & {
+export type ConnectorRendererProps = {
+  connector: Connector;
+  node: SolmuNode<any>;
+  isHovered: boolean;
+  onMouseDown: () => void;
+  onMouseOver: () => void;
+  onMouseUp: () => void;
+  onMouseOut: () => void;
+};
+
+export type SolmuRenderNode<TData = unknown> = SolmuNode<TData> & {
   transform: string;
   isSelected?: boolean;
   isDragging?: boolean;
-  renderer: React.FC<any>;
-  nodeProps: {
-    onMouseDown: (e: React.MouseEvent) => void;
-    onMouseUp: (e: React.MouseEvent) => void;
-  };
-  connectorProps: Array<{
-    key: string;
-    onMouseDown: () => void;
-    onMouseOver: () => void;
-    onMouseUp: () => void;
-    onMouseOut: () => void;
-    style: React.CSSProperties;
-    x: number;
-    y: number;
-    rx: number;
-    ry: number;
-    width: number;
-    height: number;
-    fill: string;
-  }>;
+  renderer: React.FC<NodeRendererProps<any>>;
+  nodeProps: NodeRendererProps<TData>;
+  connectorProps: ConnectorRendererProps[];
 };
 
 export type SolmuRenderEdge = Edge & {
   id: string;
   path: string;
+  labelPoint: { x: number; y: number };
+  labelAngle: number;
   isSelected?: boolean;
+};
+
+export type EdgeRendererProps = {
+  edge: SolmuRenderEdge;
 };
 
 export type SolmuDragLine = {
@@ -102,7 +120,7 @@ export type SolmuDragLine = {
 };
 
 export type SolmuElements = {
-  nodes: SolmuRenderNode[];
+  nodes: SolmuRenderNode<any>[];
   edges: SolmuRenderEdge[];
   dragLine: SolmuDragLine | null;
 };
@@ -136,7 +154,7 @@ export type RoutingConfig = {
 
 export type UseSolmuParams = {
   data: {
-    nodes: SolmuNode[];
+    nodes: SolmuNode<any>[];
     edges: Edge[];
   };
   config: {
@@ -155,12 +173,14 @@ export type UseSolmuParams = {
       zoom?: number;
       pan?: { x: number; y: number };
       grid?: {
-        size: number;
+        size: number;      // visual grid spacing in world units
+        snapSize?: number; // snap resolution in world units (defaults to size)
         visible: boolean;
         snap: boolean;
       };
     };
     routing?: RoutingConfig;
+    connectorRenderer?: React.FC<ConnectorRendererProps>;
     connections?: {
       validateOnCreate?: boolean;
       validateOnMove?: boolean;
