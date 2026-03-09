@@ -173,7 +173,8 @@ export type UseSolmuParams = {
       zoom?: number;
       pan?: { x: number; y: number };
       grid?: {
-        size: number;
+        size: number;      // visual grid spacing in world units
+        snapSize?: number; // snap resolution in world units (defaults to size)
         visible: boolean;
         snap: boolean;
       };
