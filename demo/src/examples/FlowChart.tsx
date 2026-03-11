@@ -149,7 +149,7 @@ function FlowChartCanvas({
   canvas: any;
   elements: any;
   style?: React.CSSProperties;
-  edgeLabels: { x: number; y: number; text: string }[];
+  edgeLabels: (string | null)[];
 }) {
   return (
     <svg
@@ -184,29 +184,33 @@ function FlowChartCanvas({
       ))}
 
       {/* Edge labels (Yes/No) */}
-      {edgeLabels.map((el, i) => (
-        <g key={`elabel-${i}`}>
-          <rect
-            x={el.x - 4} y={el.y - 2}
-            width={8} height={4}
-            rx={1} ry={1}
-            fill="#fff"
-            stroke="none"
-            opacity={0.85}
-          />
-          <text
-            x={el.x} y={el.y + 0.5}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            fill="#546e7a"
-            fontSize={2.2}
-            fontFamily="sans-serif"
-            fontStyle="italic"
-          >
-            {el.text}
-          </text>
-        </g>
-      ))}
+      {elements.edges.map((edge: any, i: number) => {
+        const label = edgeLabels[i];
+        if (!label) return null;
+        return (
+          <g key={`elabel-${edge.id}`}>
+            <rect
+              x={edge.labelPoint.x - 4} y={edge.labelPoint.y - 2}
+              width={8} height={4}
+              rx={1} ry={1}
+              fill="#fff"
+              stroke="none"
+              opacity={0.85}
+            />
+            <text
+              x={edge.labelPoint.x} y={edge.labelPoint.y + 0.5}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="#546e7a"
+              fontSize={2.2}
+              fontFamily="sans-serif"
+              fontStyle="italic"
+            >
+              {label}
+            </text>
+          </g>
+        );
+      })}
 
       {/* Nodes with labels */}
       {elements.nodes.map((node: any) => {
@@ -309,7 +313,24 @@ export default function FlowChartApp() {
     ],
   });
 
+  // Edge labels mapped by index - these correspond to the edges above
+  const edgeLabels = [
+    null,   // start -> input (no label)
+    null,   // input -> validate (no label)
+    null,   // validate -> isValid (no label)
+    "Yes",  // isValid -> process
+    "No",   // isValid -> error
+    null,   // error -> retry (no label)
+    "Yes",  // retry -> input
+    "No",   // retry -> end
+    null,   // process -> save (no label)
+    null,   // save -> output (no label)
+    null,   // output -> end (no label)
+  ];
+
   const routingMode = 'orthogonal' as const;
+
+  const [selectedEdgeId, setSelectedEdgeId] = React.useState<string | null>(null);
 
   function onConnect(
     start: { node: string; connector: string },
@@ -322,6 +343,26 @@ export default function FlowChartApp() {
         { source: start, target: end, type: routingMode } as Edge,
       ],
     }));
+  }
+
+  function onEdgeClick(edgeId: string) {
+    setSelectedEdgeId(edgeId);
+  }
+
+  function deleteSelectedEdge() {
+    if (selectedEdgeId) {
+      setData((prev) => {
+        const indexToRemove = prev.edges.findIndex((edge, index) => 
+          `${edge.source.node}-${edge.target.node}-${index}` === selectedEdgeId
+        );
+        if (indexToRemove === -1) return prev;
+        
+        const newEdges = [...prev.edges];
+        newEdges.splice(indexToRemove, 1);
+        return { ...prev, edges: newEdges };
+      });
+      setSelectedEdgeId(null);
+    }
   }
 
   function onNodeMove(nodeId: string, x: number, y: number) {
@@ -354,7 +395,19 @@ export default function FlowChartApp() {
     config,
     onNodeMove,
     onConnect,
+    onEdgeClick,
   });
+
+  // Keyboard handler for edge deletion
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        deleteSelectedEdge();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedEdgeId]);
 
   // Zoom & pan
   const handleWheel = (e: React.WheelEvent) => {
@@ -422,13 +475,7 @@ export default function FlowChartApp() {
     return () => window.removeEventListener('resize', handler);
   }, []);
 
-  // Edge labels for decision branches
-  const edgeLabels = [
-    { x: -5, y: 10, text: "Yes" },   // isValid -> process (below-left of diamond)
-    { x: 22, y: -5, text: "No" },    // isValid -> error (right of diamond)
-    { x: 22, y: -30, text: "Yes" },  // retry -> input (left of retry)
-    { x: 50, y: -42, text: "No" },   // retry -> end (top of retry)
-  ];
+
 
   return (
     <div
@@ -457,6 +504,7 @@ export default function FlowChartApp() {
         <div style={{ fontSize: 11, color: '#999' }}>Middle/Ctrl+Drag: Pan</div>
         <div style={{ fontSize: 11, color: '#999' }}>Drag shapes to move</div>
         <div style={{ fontSize: 11, color: '#999' }}>Drag between connectors to link</div>
+        <div style={{ fontSize: 11, color: '#999' }}>Click edge to select, Delete to remove</div>
       </div>
 
       {/* Canvas */}

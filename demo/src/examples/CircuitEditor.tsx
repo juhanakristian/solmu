@@ -197,6 +197,7 @@ export default function App() {
   const [baseNodes, setBaseNodes] = React.useState<BaseNode[]>(BASE_NODES);
   const [rotations, setRotations] = React.useState<Record<string, number>>({});
   const [edges, setEdges] = React.useState<Edge[]>(INITIAL_EDGES);
+  const [selectedEdgeId, setSelectedEdgeId] = React.useState<string | null>(null);
 
   const baseNodesRef = React.useRef(baseNodes);
   baseNodesRef.current = baseNodes;
@@ -219,6 +220,26 @@ export default function App() {
       ...prev,
       { source: start, target: end, type: routingMode },
     ]);
+  }
+
+  function onEdgeClick(edgeId: string) {
+    setSelectedEdgeId(edgeId);
+  }
+
+  function deleteSelectedEdge() {
+    if (selectedEdgeId) {
+      setEdges((prev) => {
+        const indexToRemove = prev.findIndex((edge, index) =>
+          `${edge.source.node}-${edge.target.node}-${index}` === selectedEdgeId
+        );
+        if (indexToRemove === -1) return prev;
+
+        const newEdges = [...prev];
+        newEdges.splice(indexToRemove, 1);
+        return newEdges;
+      });
+      setSelectedEdgeId(null);
+    }
   }
 
   function onNodeMove(nodeId: string, x: number, y: number) {
@@ -287,7 +308,19 @@ export default function App() {
     config,
     onNodeMove,
     onConnect,
+    onEdgeClick,
   });
+
+  // Keyboard handler for edge deletion
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        deleteSelectedEdge();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedEdgeId]);
 
   // Zoom and pan
   const handleWheel = (e: React.WheelEvent) => {
@@ -425,6 +458,7 @@ export default function App() {
         <div style={{ fontSize: 11, color: '#5a6785' }}>Drag components to move</div>
         <div style={{ fontSize: 11, color: '#5a6785' }}>Drag between pins to connect</div>
         <div style={{ fontSize: 11, color: '#5a6785' }}>R: Rotate nearest component</div>
+        <div style={{ fontSize: 11, color: '#5a6785' }}>Click wire to select, Delete to remove</div>
       </div>
 
       {/* Canvas */}

@@ -7,6 +7,7 @@ export function useSolmu({
   data,
   onNodeMove,
   onConnect,
+  onEdgeClick,
   config,
 }: UseSolmuParams): UseSolmuResult {
   // Create viewport instance with default or provided config
@@ -24,6 +25,7 @@ export function useSolmu({
     });
   }, [config.viewport]);
   const [dragItem, setDragItem] = React.useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = React.useState<string | null>(null);
 
 
   const [dragConnector, setDragConnector] =
@@ -151,6 +153,13 @@ export function useSolmu({
     }
   }
 
+  function handleEdgeClick(edgeId: string) {
+    setSelectedEdgeId(edgeId);
+    if (onEdgeClick) {
+      onEdgeClick(edgeId);
+    }
+  }
+
   // Helper functions for rendering
   const createNodeProps = (node: typeof data.nodes[0]) => ({
     node,
@@ -273,12 +282,15 @@ export function useSolmu({
       }),
       edges: data.edges.map((edge, index) => {
         const { path, labelPoint, labelAngle } = createEdgeRoute(edge);
+        const edgeId = `${edge.source.node}-${edge.target.node}-${index}`;
         return {
           ...edge,
-          id: `${edge.source.node}-${edge.target.node}-${index}`,
+          id: edgeId,
           path,
           labelPoint,
           labelAngle,
+          isSelected: selectedEdgeId === edgeId,
+          onClick: () => handleEdgeClick(edgeId),
         };
       }),
       dragLine: dragConnector && dragLine
@@ -290,7 +302,8 @@ export function useSolmu({
     },
     interactions: {
       onMouseDown: (_event: React.MouseEvent) => {
-        // Handle canvas-level interactions here if needed
+        // Deselect edge when clicking on empty canvas
+        setSelectedEdgeId(null);
       },
       onMouseMove,
       onMouseUp,

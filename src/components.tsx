@@ -65,16 +65,25 @@ export function SolmuMarkerDefs({ edges }: { edges: SolmuRenderEdge[] }) {
 }
 
 export function DefaultEdgeRenderer({ edge }: EdgeRendererProps) {
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (edge.onClick) {
+      edge.onClick();
+    }
+  };
+
   return (
     <path
       d={edge.path}
       fill="none"
-      stroke={edge.style?.stroke ?? "#00e676"}
-      strokeWidth={edge.style?.strokeWidth ?? 0.4}
+      stroke={edge.isSelected ? "#64ffda" : (edge.style?.stroke ?? "#00e676")}
+      strokeWidth={edge.isSelected ? (edge.style?.strokeWidth ?? 0.4) * 2 : (edge.style?.strokeWidth ?? 0.4)}
       strokeDasharray={edge.style?.strokeDasharray}
       opacity={edge.style?.opacity}
       markerStart={markerUrl(edge.style?.markerStart)}
       markerEnd={markerUrl(edge.style?.markerEnd)}
+      onClick={handleClick}
+      style={{ cursor: "pointer" }}
     />
   );
 }

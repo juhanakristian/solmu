@@ -288,8 +288,8 @@ function UMLCanvas({
 
 type RelationshipLabel = {
   id: string;
-  x: number;
-  y: number;
+  x?: number;
+  y?: number;
   text: string;
   sourceLabel?: string;
   targetLabel?: string;
@@ -379,6 +379,8 @@ export default function UMLDiagramApp() {
 
   const routingMode = 'orthogonal' as const;
 
+  const [selectedEdgeId, setSelectedEdgeId] = React.useState<string | null>(null);
+
   function onConnect(
     start: { node: string; connector: string },
     end: { node: string; connector: string }
@@ -390,6 +392,27 @@ export default function UMLDiagramApp() {
         { source: start, target: end, type: routingMode } as Edge,
       ],
     }));
+  }
+
+  function onEdgeClick(edgeId: string) {
+    setSelectedEdgeId(edgeId);
+  }
+
+  function deleteSelectedEdge() {
+    if (selectedEdgeId) {
+      setData((prev) => {
+        // Find the index from the edge ID
+        const indexToRemove = prev.edges.findIndex((edge, index) => 
+          `${edge.source.node}-${edge.target.node}-${index}` === selectedEdgeId
+        );
+        if (indexToRemove === -1) return prev;
+        
+        const newEdges = [...prev.edges];
+        newEdges.splice(indexToRemove, 1);
+        return { ...prev, edges: newEdges };
+      });
+      setSelectedEdgeId(null);
+    }
   }
 
   function onNodeMove(nodeId: string, x: number, y: number) {
@@ -419,7 +442,19 @@ export default function UMLDiagramApp() {
     config,
     onNodeMove,
     onConnect,
+    onEdgeClick,
   });
+
+  // Keyboard handler for edge deletion
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        deleteSelectedEdge();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedEdgeId]);
 
   // Zoom and pan
   const handleWheel = (e: React.WheelEvent) => {
@@ -504,12 +539,12 @@ export default function UMLDiagramApp() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Relationship labels positioned at edge midpoints
+  // Relationship labels configuration (positioned using edge.labelPoint)
   const relationshipLabels: RelationshipLabel[] = [
-    { id: "user-order", x: -20, y: -50, text: "", sourceLabel: "1", targetLabel: "*" },
-    { id: "order-item", x: 20, y: -15, text: "", sourceLabel: "1", targetLabel: "*" },
-    { id: "item-product", x: -20, y: 20, text: "", sourceLabel: "*", targetLabel: "1" },
-    { id: "order-payment", x: 55, y: -50, text: "\u00ABuses\u00BB", sourceLabel: "", targetLabel: "" },
+    { id: "user-order", text: "", sourceLabel: "1", targetLabel: "*" },
+    { id: "order-item", text: "", sourceLabel: "1", targetLabel: "*" },
+    { id: "item-product", text: "", sourceLabel: "*", targetLabel: "1" },
+    { id: "order-payment", text: "\u00ABuses\u00BB", sourceLabel: "", targetLabel: "" },
   ];
 
   return (
@@ -539,6 +574,7 @@ export default function UMLDiagramApp() {
         <div style={{ fontSize: 11, color: '#999' }}>Middle/Ctrl+Drag: Pan</div>
         <div style={{ fontSize: 11, color: '#999' }}>Drag classes to move</div>
         <div style={{ fontSize: 11, color: '#999' }}>Drag between connectors to link</div>
+        <div style={{ fontSize: 11, color: '#999' }}>Click edge to select, Delete to remove</div>
       </div>
 
       {/* Canvas */}
@@ -559,44 +595,52 @@ export default function UMLDiagramApp() {
           }}
         >
           {/* Relationship multiplicity labels */}
-          {relationshipLabels.map((rl) => (
-            <g key={rl.id}>
-              {rl.text && (
-                <text
-                  x={rl.x} y={rl.y - 2}
-                  textAnchor="middle"
-                  fill="#8d6e63"
-                  fontSize={2}
-                  fontFamily="sans-serif"
-                  fontStyle="italic"
-                >
-                  {rl.text}
-                </text>
-              )}
-              {rl.sourceLabel && (
-                <text
-                  x={rl.x - 3} y={rl.y + 2}
-                  textAnchor="middle"
-                  fill="#5d4037"
-                  fontSize={2}
-                  fontFamily="sans-serif"
-                >
-                  {rl.sourceLabel}
-                </text>
-              )}
-              {rl.targetLabel && (
-                <text
-                  x={rl.x + 3} y={rl.y + 2}
-                  textAnchor="middle"
-                  fill="#5d4037"
-                  fontSize={2}
-                  fontFamily="sans-serif"
-                >
-                  {rl.targetLabel}
-                </text>
-              )}
-            </g>
-          ))}
+          {relationshipLabels.map((rl) => {
+            // Find the corresponding edge to get its labelPoint
+            const edgeIndex = ["user-order", "order-item", "item-product", "order-payment"].indexOf(rl.id);
+            const edge = elements.edges[edgeIndex];
+            if (!edge) return null;
+            const x = edge.labelPoint.x;
+            const y = edge.labelPoint.y;
+            return (
+              <g key={rl.id}>
+                {rl.text && (
+                  <text
+                    x={x} y={y - 2}
+                    textAnchor="middle"
+                    fill="#8d6e63"
+                    fontSize={2}
+                    fontFamily="sans-serif"
+                    fontStyle="italic"
+                  >
+                    {rl.text}
+                  </text>
+                )}
+                {rl.sourceLabel && (
+                  <text
+                    x={x - 3} y={y + 2}
+                    textAnchor="middle"
+                    fill="#5d4037"
+                    fontSize={2}
+                    fontFamily="sans-serif"
+                  >
+                    {rl.sourceLabel}
+                  </text>
+                )}
+                {rl.targetLabel && (
+                  <text
+                    x={x + 3} y={y + 2}
+                    textAnchor="middle"
+                    fill="#5d4037"
+                    fontSize={2}
+                    fontFamily="sans-serif"
+                  >
+                    {rl.targetLabel}
+                  </text>
+                )}
+              </g>
+            );
+          })}
         </UMLCanvas>
       </div>
     </div>

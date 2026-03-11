@@ -108,6 +108,7 @@ export type SolmuRenderEdge = Edge & {
   labelPoint: { x: number; y: number };
   labelAngle: number;
   isSelected?: boolean;
+  onClick?: () => void;
 };
 
 export type EdgeRendererProps = {
@@ -198,4 +199,5 @@ export type UseSolmuParams = {
   };
   onNodeMove?: NodeMoveFunc;
   onConnect?: ConnectFunc;
+  onEdgeClick?: (edgeId: string) => void;
 };
