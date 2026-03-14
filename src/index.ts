@@ -6,6 +6,6 @@ export * from "./types";
 export * from "./viewport";
 
 // Export routing utilities
-export { calculateRoute, getNodeBounds, calculateSimpleOrthogonalRoute } from "./routing";
+export { calculateRoute, getNodeBounds, calculateSimpleOrthogonalRoute, buildPathFromWaypoints } from "./routing";
 export type { Point, Rectangle, NodeBounds, RoutingMode, RouteResult } from "./routing";
 

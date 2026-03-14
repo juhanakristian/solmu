@@ -18,6 +18,7 @@ export interface RouteResult {
   path: string;
   labelPoint: Point;
   labelAngle: number; // degrees, tangent direction at label point
+  resolvedPoints: Point[]; // full path including start and end
 }
 
 export interface InternalRoutingConfig {
@@ -366,45 +367,97 @@ function findPathAStar(
 /**
  * Simplify path by removing redundant collinear points
  */
+/**
+ * Snap nearly-axis-aligned segments to be exactly axis-aligned.
+ * If two consecutive points differ by less than `epsilon` on one axis,
+ * the later point is snapped to match the earlier point on that axis.
+ * This prevents tiny offsets from creating false bends.
+ */
+function snapToAxis(path: Point[], epsilon: number = 0.5): Point[] {
+  if (path.length < 2) return path;
+  const result = path.map(p => ({ ...p }));
+  for (let i = 1; i < result.length; i++) {
+    const prev = result[i - 1];
+    const curr = result[i];
+    if (Math.abs(curr.x - prev.x) < epsilon && Math.abs(curr.y - prev.y) >= epsilon) {
+      curr.x = prev.x; // nearly vertical → make exactly vertical
+    } else if (Math.abs(curr.y - prev.y) < epsilon && Math.abs(curr.x - prev.x) >= epsilon) {
+      curr.y = prev.y; // nearly horizontal → make exactly horizontal
+    }
+  }
+  return result;
+}
+
+/**
+ * Simplify path by removing redundant collinear points.
+ * Also removes zero-length segments and merges segments that are
+ * collinear (same axis, regardless of direction).
+ */
 function simplifyPath(path: Point[]): Point[] {
   if (path.length <= 2) return path;
 
-  const simplified: Point[] = [path[0]];
+  // First snap near-axis-aligned segments
+  const snapped = snapToAxis(path);
 
-  for (let i = 1; i < path.length - 1; i++) {
+  const simplified: Point[] = [snapped[0]];
+
+  for (let i = 1; i < snapped.length - 1; i++) {
     const prev = simplified[simplified.length - 1];
-    const curr = path[i];
-    const next = path[i + 1];
+    const curr = snapped[i];
+    const next = snapped[i + 1];
 
-    // Check if points are collinear
     const dx1 = curr.x - prev.x;
     const dy1 = curr.y - prev.y;
     const dx2 = next.x - curr.x;
     const dy2 = next.y - curr.y;
 
-    // Cross product - if near zero, points are collinear
+    // Zero-length segment — skip
+    if (Math.abs(dx1) < 0.01 && Math.abs(dy1) < 0.01) continue;
+
+    // Both segments on same vertical line (regardless of direction)
+    const bothVertical = Math.abs(dx1) < 0.01 && Math.abs(dx2) < 0.01;
+    // Both segments on same horizontal line (regardless of direction)
+    const bothHorizontal = Math.abs(dy1) < 0.01 && Math.abs(dy2) < 0.01;
+
+    // General collinearity via cross product
     const crossProduct = Math.abs(dx1 * dy2 - dx2 * dy1);
+    const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1);
+    const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+    // Normalize cross product by segment lengths to get a scale-independent measure
+    const normalizedCross = (len1 > 0 && len2 > 0)
+      ? crossProduct / (len1 * len2)
+      : 0;
+    const generalCollinear = normalizedCross < 0.01;
 
-    // Points are collinear (same direction) if:
-    // - Both segments are vertical (dx1 === 0 && dx2 === 0), OR
-    // - Both segments are horizontal going same direction, OR
-    // - Zero-length segment, OR
-    // - Cross product is near zero (general collinearity check)
-    const isCollinear =
-      (dx1 === 0 && dx2 === 0) ||
-      (dy1 === 0 && dy2 === 0 && Math.sign(dx1) === Math.sign(dx2)) ||
-      (dx1 === 0 && dy1 === 0) ||
-      (crossProduct < 0.001 && Math.sign(dx1) === Math.sign(dx2) && Math.sign(dy1) === Math.sign(dy2));
+    const isCollinear = bothVertical || bothHorizontal || generalCollinear;
 
-    // Keep points where direction changes (not collinear)
     if (!isCollinear) {
       simplified.push(curr);
     }
   }
 
-  simplified.push(path[path.length - 1]);
+  simplified.push(snapped[snapped.length - 1]);
 
   return simplified;
+}
+
+/**
+ * Ensure all segments in a path are axis-aligned by inserting mid-points
+ * for any diagonal segments (horizontal first, then vertical).
+ * This makes resolvedPoints match what pathToOrthogonalSVG renders.
+ */
+function orthogonalizePoints(path: Point[]): Point[] {
+  if (path.length < 2) return path;
+  const result: Point[] = [path[0]];
+  for (let i = 1; i < path.length; i++) {
+    const prev = path[i - 1];
+    const curr = path[i];
+    if (prev.x !== curr.x && prev.y !== curr.y) {
+      result.push({ x: curr.x, y: prev.y });
+    }
+    result.push(curr);
+  }
+  return result;
 }
 
 /**
@@ -524,7 +577,7 @@ function directBezierResult(start: Point, end: Point): RouteResult {
   const { point: labelPoint, angle: labelAngle } = cubicBezierMidpoint(
     start, { x: cx1, y: cy1 }, { x: cx2, y: cy2 }, end
   );
-  return { path, labelPoint, labelAngle };
+  return { path, labelPoint, labelAngle, resolvedPoints: [start, end] };
 }
 
 /**
@@ -650,7 +703,7 @@ export function calculateRoute(
       pts.push(end);
       if (mode === 'orthogonal') {
         const { point: labelPoint, angle: labelAngle } = midpointOfPolyline(pts);
-        return { path: pathToOrthogonalSVG(pts), labelPoint, labelAngle };
+        return { path: pathToOrthogonalSVG(pts), labelPoint, labelAngle, resolvedPoints: pts };
       }
     }
     return directBezierResult(start, end);
@@ -671,13 +724,24 @@ export function calculateRoute(
     simplified[simplified.length - 1] = end;
   }
 
+  // Re-simplify after adding stubs to collapse collinear points
+  // (e.g. a straight vertical line with stubs would have 4 collinear points)
+  simplified = simplifyPath(simplified);
+
+  // For orthogonal mode, ensure all segments are axis-aligned by inserting
+  // mid-points for any diagonal segments, then re-simplify to clean up.
+  // This keeps resolvedPoints in sync with the rendered SVG path.
+  if (mode === 'orthogonal') {
+    simplified = simplifyPath(orthogonalizePoints(simplified));
+  }
+
   const { point: labelPoint, angle: labelAngle } = midpointOfPolyline(simplified);
 
   // Convert to SVG based on mode
   if (mode === 'orthogonal') {
-    return { path: pathToOrthogonalSVG(simplified), labelPoint, labelAngle };
+    return { path: pathToOrthogonalSVG(simplified), labelPoint, labelAngle, resolvedPoints: simplified };
   } else {
-    return { path: pathToBezierSVG(simplified, cornerRadius), labelPoint, labelAngle };
+    return { path: pathToBezierSVG(simplified, cornerRadius), labelPoint, labelAngle, resolvedPoints: simplified };
   }
 }
 
@@ -730,4 +794,34 @@ export function calculateSimpleOrthogonalRoute(
 
   // Fallback to direct path
   return [start, end];
+}
+
+/**
+ * Build a route from user-provided waypoints (no auto-routing).
+ * Used when an edge has manually-edited waypoints.
+ */
+export function buildPathFromWaypoints(
+  start: Point,
+  waypoints: Point[],
+  end: Point,
+  mode: RoutingMode = 'orthogonal',
+  cornerRadius: number = 5
+): RouteResult {
+  let points = [start, ...waypoints, end];
+
+  // For orthogonal mode, ensure all segments are axis-aligned
+  if (mode === 'orthogonal') {
+    points = simplifyPath(orthogonalizePoints(points));
+  }
+
+  const { point: labelPoint, angle: labelAngle } = midpointOfPolyline(points);
+
+  let path: string;
+  if (mode === 'orthogonal') {
+    path = pathToOrthogonalSVG(points);
+  } else {
+    path = pathToBezierSVG(points, cornerRadius);
+  }
+
+  return { path, labelPoint, labelAngle, resolvedPoints: points };
 }

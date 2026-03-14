@@ -3,11 +3,13 @@ import "./App.css";
 import CircuitEditor from "./examples/CircuitEditor";
 import UMLDiagram from "./examples/UMLDiagram";
 import FlowChart from "./examples/FlowChart";
+import DatabaseDiagram from "./examples/DatabaseDiagram";
 
 const EXAMPLES = [
   { id: "circuit", label: "Circuit Editor", component: CircuitEditor },
   { id: "uml", label: "UML Class Diagram", component: UMLDiagram },
   { id: "flowchart", label: "Flow Chart", component: FlowChart },
+  { id: "database", label: "Database Diagram", component: DatabaseDiagram },
 ] as const;
 
 function App() {

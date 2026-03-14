@@ -47,6 +47,7 @@ export type Edge = {
   target: EdgeNode;
   type: EdgeType;
   style?: EdgeStyle;
+  waypoints?: { x: number; y: number }[];  // user-defined bend points override auto-routing
 };
 
 export type NodeRendererProps<TData = unknown> = {
@@ -102,6 +103,14 @@ export type SolmuRenderNode<TData = unknown> = SolmuNode<TData> & {
   connectorProps: ConnectorRendererProps[];
 };
 
+export type EdgeSegment = {
+  index: number;
+  p1: { x: number; y: number };
+  p2: { x: number; y: number };
+  orientation: "horizontal" | "vertical" | "diagonal";
+  draggable: boolean;
+};
+
 export type SolmuRenderEdge = Edge & {
   id: string;
   path: string;
@@ -109,6 +118,9 @@ export type SolmuRenderEdge = Edge & {
   labelAngle: number;
   isSelected?: boolean;
   onClick?: () => void;
+  resolvedWaypoints: { x: number; y: number }[];
+  segments: EdgeSegment[];
+  onSegmentDragStart?: (segmentIndex: number, event: React.MouseEvent) => void;
 };
 
 export type EdgeRendererProps = {
@@ -200,4 +212,5 @@ export type UseSolmuParams = {
   onNodeMove?: NodeMoveFunc;
   onConnect?: ConnectFunc;
   onEdgeClick?: (edgeId: string) => void;
+  onEdgePathChange?: (edgeId: string, waypoints: { x: number; y: number }[]) => void;
 };
