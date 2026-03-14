@@ -172,15 +172,40 @@ function FlowChartCanvas({
         />
       ))}
 
-      {/* Edges */}
+      {/* Edges with draggable segment hit areas */}
       {elements.edges.map((edge: any) => (
-        <path
-          key={edge.id}
-          d={edge.path}
-          fill="none"
-          stroke="#546e7a"
-          strokeWidth={0.3}
-        />
+        <g key={edge.id}>
+          <path
+            d={edge.path}
+            fill="none"
+            stroke={edge.isSelected ? "#1565c0" : "#546e7a"}
+            strokeWidth={edge.isSelected ? 0.5 : 0.3}
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+              edge.onClick?.();
+            }}
+            style={{ cursor: "pointer" }}
+          />
+          {/* Invisible hit areas for draggable segments */}
+          {edge.segments?.filter((s: any) => s.draggable).map((segment: any) => (
+            <line
+              key={`seg-${segment.index}`}
+              x1={segment.p1.x}
+              y1={segment.p1.y}
+              x2={segment.p2.x}
+              y2={segment.p2.y}
+              stroke="transparent"
+              strokeWidth={3}
+              style={{
+                cursor: segment.orientation === "horizontal" ? "ns-resize" : "ew-resize",
+              }}
+              onMouseDown={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                edge.onSegmentDragStart?.(segment.index, e);
+              }}
+            />
+          ))}
+        </g>
       ))}
 
       {/* Edge labels (Yes/No) */}
@@ -372,6 +397,16 @@ export default function FlowChartApp() {
     }));
   }
 
+  function onEdgePathChange(edgeId: string, waypoints: { x: number; y: number }[]) {
+    setData((prev) => ({
+      ...prev,
+      edges: prev.edges.map((edge, index) => {
+        const id = `${edge.source.node}-${edge.target.node}-${index}`;
+        return id === edgeId ? { ...edge, waypoints } : edge;
+      }),
+    }));
+  }
+
   const config = {
     renderers: [
       { type: "terminal", component: Terminal },
@@ -396,6 +431,7 @@ export default function FlowChartApp() {
     onNodeMove,
     onConnect,
     onEdgeClick,
+    onEdgePathChange,
   });
 
   // Keyboard handler for edge deletion
@@ -505,6 +541,7 @@ export default function FlowChartApp() {
         <div style={{ fontSize: 11, color: '#999' }}>Drag shapes to move</div>
         <div style={{ fontSize: 11, color: '#999' }}>Drag between connectors to link</div>
         <div style={{ fontSize: 11, color: '#999' }}>Click edge to select, Delete to remove</div>
+        <div style={{ fontSize: 11, color: '#999' }}>Drag edge segments to reshape</div>
       </div>
 
       {/* Canvas */}

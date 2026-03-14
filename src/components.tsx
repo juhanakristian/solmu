@@ -72,19 +72,42 @@ export function DefaultEdgeRenderer({ edge }: EdgeRendererProps) {
     }
   };
 
+  const hitAreaWidth = Math.max((edge.style?.strokeWidth ?? 0.4) * 10, 3);
+
   return (
-    <path
-      d={edge.path}
-      fill="none"
-      stroke={edge.isSelected ? "#64ffda" : (edge.style?.stroke ?? "#00e676")}
-      strokeWidth={edge.isSelected ? (edge.style?.strokeWidth ?? 0.4) * 2 : (edge.style?.strokeWidth ?? 0.4)}
-      strokeDasharray={edge.style?.strokeDasharray}
-      opacity={edge.style?.opacity}
-      markerStart={markerUrl(edge.style?.markerStart)}
-      markerEnd={markerUrl(edge.style?.markerEnd)}
-      onClick={handleClick}
-      style={{ cursor: "pointer" }}
-    />
+    <g>
+      <path
+        d={edge.path}
+        fill="none"
+        stroke={edge.isSelected ? "#64ffda" : (edge.style?.stroke ?? "#00e676")}
+        strokeWidth={edge.isSelected ? (edge.style?.strokeWidth ?? 0.4) * 2 : (edge.style?.strokeWidth ?? 0.4)}
+        strokeDasharray={edge.style?.strokeDasharray}
+        opacity={edge.style?.opacity}
+        markerStart={markerUrl(edge.style?.markerStart)}
+        markerEnd={markerUrl(edge.style?.markerEnd)}
+        onClick={handleClick}
+        style={{ cursor: "pointer" }}
+      />
+      {/* Invisible hit areas for draggable segments */}
+      {edge.segments?.filter(s => s.draggable).map(segment => (
+        <line
+          key={`seg-${segment.index}`}
+          x1={segment.p1.x}
+          y1={segment.p1.y}
+          x2={segment.p2.x}
+          y2={segment.p2.y}
+          stroke="transparent"
+          strokeWidth={hitAreaWidth}
+          style={{
+            cursor: segment.orientation === "horizontal" ? "ns-resize" : "ew-resize",
+          }}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            edge.onSegmentDragStart?.(segment.index, e);
+          }}
+        />
+      ))}
+    </g>
   );
 }
 

@@ -248,6 +248,15 @@ export default function App() {
     );
   }
 
+  function onEdgePathChange(edgeId: string, waypoints: { x: number; y: number }[]) {
+    setEdges((prev) =>
+      prev.map((edge, index) => {
+        const id = `${edge.source.node}-${edge.target.node}-${index}`;
+        return id === edgeId ? { ...edge, waypoints } : edge;
+      })
+    );
+  }
+
   // Keyboard handler — "r" rotates nearest node to cursor
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -309,6 +318,7 @@ export default function App() {
     onNodeMove,
     onConnect,
     onEdgeClick,
+    onEdgePathChange,
   });
 
   // Keyboard handler for edge deletion

@@ -422,6 +422,16 @@ export default function UMLDiagramApp() {
     }));
   }
 
+  function onEdgePathChange(edgeId: string, waypoints: { x: number; y: number }[]) {
+    setData((prev) => ({
+      ...prev,
+      edges: prev.edges.map((edge, index) => {
+        const id = `${edge.source.node}-${edge.target.node}-${index}`;
+        return id === edgeId ? { ...edge, waypoints } : edge;
+      }),
+    }));
+  }
+
   const config = {
     renderers: [
       { type: "uml-class", component: UMLClassBox },
@@ -443,6 +453,7 @@ export default function UMLDiagramApp() {
     onNodeMove,
     onConnect,
     onEdgeClick,
+    onEdgePathChange,
   });
 
   // Keyboard handler for edge deletion

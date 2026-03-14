@@ -1,13 +1,57 @@
 import React from "react";
-import { SolmuNodeConnector, UseSolmuParams, UseSolmuResult } from "./types";
+import { SolmuNodeConnector, UseSolmuParams, UseSolmuResult, EdgeSegment } from "./types";
 import { SolmuViewport } from "./viewport";
-import { calculateRoute, getNodeBounds, type InternalRoutingConfig, type NodeBounds } from "./routing";
+import { calculateRoute, buildPathFromWaypoints, getNodeBounds, type InternalRoutingConfig, type NodeBounds, type Point } from "./routing";
+
+/**
+ * Compute edge segments from resolved waypoints for hit testing and dragging.
+ * Inner segments (not touching start/end connector points) are draggable.
+ */
+function computeSegments(resolvedPoints: Point[]): EdgeSegment[] {
+  if (resolvedPoints.length < 2) return [];
+
+  const segments: EdgeSegment[] = [];
+  const waypointCount = resolvedPoints.length - 2; // exclude start and end
+
+  for (let i = 0; i < resolvedPoints.length - 1; i++) {
+    const p1 = resolvedPoints[i];
+    const p2 = resolvedPoints[i + 1];
+
+    const dx = Math.abs(p2.x - p1.x);
+    const dy = Math.abs(p2.y - p1.y);
+
+    let orientation: "horizontal" | "vertical" | "diagonal";
+    if (dy < 0.01 && dx >= 0.01) {
+      orientation = "horizontal";
+    } else if (dx < 0.01 && dy >= 0.01) {
+      orientation = "vertical";
+    } else {
+      orientation = "diagonal";
+    }
+
+    // A segment is draggable if at least one endpoint is a user waypoint
+    // (not a connector start/end point) and it's axis-aligned.
+    // resolvedPoints[0] = start (connector), resolvedPoints[last] = end (connector).
+    // Index i is a waypoint when 1 <= i <= resolvedPoints.length - 2.
+    // Index i+1 is a waypoint when 0 <= i <= resolvedPoints.length - 3.
+    // At least one waypoint endpoint: i >= 1 OR i <= resolvedPoints.length - 3.
+    // When dragging, the drag handler's bounds checks ensure only waypoint
+    // endpoints move — connector endpoints stay fixed.
+    const hasWaypointEndpoint = (i >= 1) || (i + 1 <= resolvedPoints.length - 2);
+    const draggable = hasWaypointEndpoint && orientation !== "diagonal";
+
+    segments.push({ index: i, p1, p2, orientation, draggable });
+  }
+
+  return segments;
+}
 
 export function useSolmu({
   data,
   onNodeMove,
   onConnect,
   onEdgeClick,
+  onEdgePathChange,
   config,
 }: UseSolmuParams): UseSolmuResult {
   // Create viewport instance with default or provided config
@@ -26,6 +70,15 @@ export function useSolmu({
   }, [config.viewport]);
   const [dragItem, setDragItem] = React.useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = React.useState<string | null>(null);
+
+  // Edge segment dragging state
+  const [dragSegment, setDragSegment] = React.useState<{
+    edgeId: string;
+    segmentIndex: number;
+    orientation: "horizontal" | "vertical";
+    initialWaypoints: Point[];  // waypoints (without start/end) at drag start
+    initialMouseWorld: Point;   // mouse world position at drag start
+  } | null>(null);
 
 
   const [dragConnector, setDragConnector] =
@@ -49,6 +102,7 @@ export function useSolmu({
 
   function onMouseUp(_event: React.MouseEvent) {
     if (dragItem) setDragItem(null);
+    if (dragSegment) setDragSegment(null);
     if (dragConnector) {
       if (hoverConnector && onConnect) {
         onConnect(
@@ -82,6 +136,67 @@ export function useSolmu({
           const snapped = viewport.snapToGrid({ x: worldPoint.x, y: worldPoint.y });
           
           onNodeMove(dragItem, snapped.x, snapped.y);
+
+          // Clear waypoints on all edges connected to the dragged node
+          // so they get auto-routed to follow the node's new position
+          if (onEdgePathChange) {
+            data.edges.forEach((edge, index) => {
+              if (edge.waypoints && edge.waypoints.length > 0) {
+                if (edge.source.node === dragItem || edge.target.node === dragItem) {
+                  const edgeId = `${edge.source.node}-${edge.target.node}-${index}`;
+                  onEdgePathChange(edgeId, []);
+                }
+              }
+            });
+          }
+        }
+      }
+    }
+
+    if (dragSegment && onEdgePathChange) {
+      const svg = (event.target as Element).closest('svg');
+      if (svg) {
+        const rect = svg.getBoundingClientRect();
+        const svgPoint = svg.createSVGPoint();
+        svgPoint.x = event.clientX - rect.left;
+        svgPoint.y = event.clientY - rect.top;
+
+        const ctm = svg.getScreenCTM();
+        if (ctm) {
+          const worldPoint = svgPoint.matrixTransform(ctm.inverse());
+          const snapped = viewport.snapToGrid({ x: worldPoint.x, y: worldPoint.y });
+
+          const deltaX = snapped.x - dragSegment.initialMouseWorld.x;
+          const deltaY = snapped.y - dragSegment.initialMouseWorld.y;
+
+          // Copy the initial waypoints and modify the two that bound the dragged segment
+          const newWaypoints = dragSegment.initialWaypoints.map(w => ({ ...w }));
+
+          // Segment[i] in resolvedPoints connects resolvedPoints[i] and resolvedPoints[i+1].
+          // resolvedPoints = [start, ...waypoints, end]
+          // So waypoint indices are: segmentIndex - 1 and segmentIndex
+          const wpIdx1 = dragSegment.segmentIndex - 1;
+          const wpIdx2 = dragSegment.segmentIndex;
+
+          if (dragSegment.orientation === "horizontal") {
+            // Horizontal segment → drag vertically (change y)
+            if (wpIdx1 >= 0 && wpIdx1 < newWaypoints.length) {
+              newWaypoints[wpIdx1] = { ...newWaypoints[wpIdx1], y: newWaypoints[wpIdx1].y + deltaY };
+            }
+            if (wpIdx2 >= 0 && wpIdx2 < newWaypoints.length) {
+              newWaypoints[wpIdx2] = { ...newWaypoints[wpIdx2], y: newWaypoints[wpIdx2].y + deltaY };
+            }
+          } else {
+            // Vertical segment → drag horizontally (change x)
+            if (wpIdx1 >= 0 && wpIdx1 < newWaypoints.length) {
+              newWaypoints[wpIdx1] = { ...newWaypoints[wpIdx1], x: newWaypoints[wpIdx1].x + deltaX };
+            }
+            if (wpIdx2 >= 0 && wpIdx2 < newWaypoints.length) {
+              newWaypoints[wpIdx2] = { ...newWaypoints[wpIdx2], x: newWaypoints[wpIdx2].x + deltaX };
+            }
+          }
+
+          onEdgePathChange(dragSegment.edgeId, newWaypoints);
         }
       }
     }
@@ -201,7 +316,7 @@ export function useSolmu({
     : getNodeBounds(data.nodes, undefined, config.routing?.nodeDimensions);
 
   const createEdgeRoute = (edge: typeof data.edges[0]) => {
-    const fallback = { path: "", labelPoint: { x: 0, y: 0 }, labelAngle: 0 };
+    const fallback = { path: "", labelPoint: { x: 0, y: 0 }, labelAngle: 0, resolvedPoints: [] as Point[] };
 
     const source = data.nodes.find((n) => n.id === edge.source.node);
     const target = data.nodes.find((n) => n.id === edge.target.node);
@@ -225,6 +340,7 @@ export function useSolmu({
         path: `M${x1},${y1} L ${x2},${y2}`,
         labelPoint: { x: (x1 + x2) / 2, y: (y1 + y2) / 2 },
         labelAngle: Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI),
+        resolvedPoints: [start, end],
       };
     }
 
@@ -238,6 +354,17 @@ export function useSolmu({
       mode = "bezier";
     }
 
+    // If edge has user-defined waypoints, use them directly (skip auto-routing)
+    if (edge.waypoints && edge.waypoints.length > 0) {
+      return buildPathFromWaypoints(
+        start,
+        edge.waypoints,
+        end,
+        mode,
+        routingConfig.cornerRadius
+      );
+    }
+
     // Filter out source and target nodes from obstacles
     const obstacles = nodeBoundsCache.filter(
       (ob) => ob.id !== source.id && ob.id !== target.id
@@ -246,9 +373,57 @@ export function useSolmu({
     return calculateRoute(start, end, obstacles, { ...routingConfig, mode }, sc, tc);
   };
 
+  // Handle segment drag start — captures initial state for drag calculations
+  function handleSegmentDragStart(
+    edgeId: string,
+    segmentIndex: number,
+    resolvedPoints: Point[],
+    event: React.MouseEvent
+  ) {
+    event.stopPropagation();
+
+    const svg = (event.target as Element).closest('svg');
+    if (!svg) return;
+
+    const rect = svg.getBoundingClientRect();
+    const svgPoint = svg.createSVGPoint();
+    svgPoint.x = event.clientX - rect.left;
+    svgPoint.y = event.clientY - rect.top;
+
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return;
+
+    const worldPoint = svgPoint.matrixTransform(ctm.inverse());
+    const snapped = viewport.snapToGrid({ x: worldPoint.x, y: worldPoint.y });
+
+    // Extract waypoints (everything except start and end)
+    const initialWaypoints = resolvedPoints.slice(1, -1).map(p => ({ ...p }));
+
+    // Determine orientation of this segment
+    const p1 = resolvedPoints[segmentIndex];
+    const p2 = resolvedPoints[segmentIndex + 1];
+    const orientation: "horizontal" | "vertical" =
+      Math.abs(p2.y - p1.y) < 0.01 ? "horizontal" : "vertical";
+
+    setDragSegment({
+      edgeId,
+      segmentIndex,
+      orientation,
+      initialWaypoints,
+      initialMouseWorld: snapped,
+    });
+
+    // Select the edge being dragged
+    handleEdgeClick(edgeId);
+  }
+
   return {
     canvas: {
       props: {
+        onMouseDown: (_event: React.MouseEvent) => {
+          // Deselect edge when clicking on empty canvas
+          setSelectedEdgeId(null);
+        },
         onMouseMove,
         onMouseUp,
       },
@@ -281,8 +456,9 @@ export function useSolmu({
         };
       }),
       edges: data.edges.map((edge, index) => {
-        const { path, labelPoint, labelAngle } = createEdgeRoute(edge);
+        const { path, labelPoint, labelAngle, resolvedPoints } = createEdgeRoute(edge);
         const edgeId = `${edge.source.node}-${edge.target.node}-${index}`;
+        const segments = computeSegments(resolvedPoints);
         return {
           ...edge,
           id: edgeId,
@@ -291,6 +467,12 @@ export function useSolmu({
           labelAngle,
           isSelected: selectedEdgeId === edgeId,
           onClick: () => handleEdgeClick(edgeId),
+          resolvedWaypoints: resolvedPoints,
+          segments,
+          onSegmentDragStart: onEdgePathChange
+            ? (segmentIndex: number, event: React.MouseEvent) =>
+                handleSegmentDragStart(edgeId, segmentIndex, resolvedPoints, event)
+            : undefined,
         };
       }),
       dragLine: dragConnector && dragLine
