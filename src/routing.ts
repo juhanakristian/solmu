@@ -19,6 +19,8 @@ export interface RouteResult {
   labelPoint: Point;
   labelAngle: number; // degrees, tangent direction at label point
   resolvedPoints: Point[]; // full path including start and end
+  sourceLabelPoint: Point; // position near source endpoint for labels
+  targetLabelPoint: Point; // position near target endpoint for labels
 }
 
 export interface InternalRoutingConfig {
@@ -577,7 +579,9 @@ function directBezierResult(start: Point, end: Point): RouteResult {
   const { point: labelPoint, angle: labelAngle } = cubicBezierMidpoint(
     start, { x: cx1, y: cy1 }, { x: cx2, y: cy2 }, end
   );
-  return { path, labelPoint, labelAngle, resolvedPoints: [start, end] };
+  const resolvedPoints = [start, end];
+  const { source: sourceLabelPoint, target: targetLabelPoint } = endpointLabelPoints(resolvedPoints);
+  return { path, labelPoint, labelAngle, resolvedPoints, sourceLabelPoint, targetLabelPoint };
 }
 
 /**
@@ -617,6 +621,41 @@ function midpointOfPolyline(points: Point[]): { point: Point; angle: number } {
     point: last,
     angle: Math.atan2(last.y - prev.y, last.x - prev.x) * (180 / Math.PI),
   };
+}
+
+/**
+ * Compute label positions near the source and target endpoints of a polyline.
+ * The label point is offset `distance` along the first/last segment from the endpoint,
+ * plus a perpendicular offset to sit beside the edge rather than on it.
+ */
+function endpointLabelPoints(
+  points: Point[],
+  distance: number = 8,
+  perpOffset: number = 4
+): { source: Point; target: Point } {
+  if (points.length < 2) {
+    const p = points[0] || { x: 0, y: 0 };
+    return { source: p, target: p };
+  }
+
+  function offsetAlongSegment(from: Point, to: Point): Point {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 0.01) return from;
+    const t = Math.min(distance / len, 0.5); // don't go past midpoint
+    const px = from.x + dx * t;
+    const py = from.y + dy * t;
+    // Perpendicular offset (rotate direction 90° CCW)
+    const nx = -dy / len;
+    const ny = dx / len;
+    return { x: px + nx * perpOffset, y: py + ny * perpOffset };
+  }
+
+  const source = offsetAlongSegment(points[0], points[1]);
+  const target = offsetAlongSegment(points[points.length - 1], points[points.length - 2]);
+
+  return { source, target };
 }
 
 /**
@@ -703,7 +742,8 @@ export function calculateRoute(
       pts.push(end);
       if (mode === 'orthogonal') {
         const { point: labelPoint, angle: labelAngle } = midpointOfPolyline(pts);
-        return { path: pathToOrthogonalSVG(pts), labelPoint, labelAngle, resolvedPoints: pts };
+        const { source: sourceLabelPoint, target: targetLabelPoint } = endpointLabelPoints(pts);
+        return { path: pathToOrthogonalSVG(pts), labelPoint, labelAngle, resolvedPoints: pts, sourceLabelPoint, targetLabelPoint };
       }
     }
     return directBezierResult(start, end);
@@ -736,12 +776,13 @@ export function calculateRoute(
   }
 
   const { point: labelPoint, angle: labelAngle } = midpointOfPolyline(simplified);
+  const { source: sourceLabelPoint, target: targetLabelPoint } = endpointLabelPoints(simplified);
 
   // Convert to SVG based on mode
   if (mode === 'orthogonal') {
-    return { path: pathToOrthogonalSVG(simplified), labelPoint, labelAngle, resolvedPoints: simplified };
+    return { path: pathToOrthogonalSVG(simplified), labelPoint, labelAngle, resolvedPoints: simplified, sourceLabelPoint, targetLabelPoint };
   } else {
-    return { path: pathToBezierSVG(simplified, cornerRadius), labelPoint, labelAngle, resolvedPoints: simplified };
+    return { path: pathToBezierSVG(simplified, cornerRadius), labelPoint, labelAngle, resolvedPoints: simplified, sourceLabelPoint, targetLabelPoint };
   }
 }
 
@@ -823,5 +864,6 @@ export function buildPathFromWaypoints(
     path = pathToBezierSVG(points, cornerRadius);
   }
 
-  return { path, labelPoint, labelAngle, resolvedPoints: points };
+  const { source: sourceLabelPoint, target: targetLabelPoint } = endpointLabelPoints(points);
+  return { path, labelPoint, labelAngle, resolvedPoints: points, sourceLabelPoint, targetLabelPoint };
 }

@@ -116,6 +116,8 @@ export type SolmuRenderEdge = Edge & {
   path: string;
   labelPoint: { x: number; y: number };
   labelAngle: number;
+  sourceLabelPoint: { x: number; y: number };
+  targetLabelPoint: { x: number; y: number };
   isSelected?: boolean;
   onClick?: () => void;
   resolvedWaypoints: { x: number; y: number }[];
@@ -211,6 +213,7 @@ export type UseSolmuParams = {
   };
   onNodeMove?: NodeMoveFunc;
   onConnect?: ConnectFunc;
+  onNodeClick?: (nodeId: string) => void;
   onEdgeClick?: (edgeId: string) => void;
   onEdgePathChange?: (edgeId: string, waypoints: { x: number; y: number }[]) => void;
 };

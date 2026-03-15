@@ -17,6 +17,17 @@ const { canvas, elements } = useSolmu({
 });
 ```
 
+### `onNodeClick(nodeId)`
+
+Called when a node is clicked (mousedown). The node is internally selected (`node.isSelected = true`), and any selected edge is deselected:
+
+```tsx
+function onNodeClick(nodeId: string) {
+  setSelectedTable(nodeId);
+  // open property panel, show details, etc.
+}
+```
+
 ### `onNodeMove(nodeId, x, y)`
 
 Called on every mouse move while a node is being dragged. Update the node position in your state:
@@ -123,6 +134,29 @@ The drag line is available as `elements.dragLine`:
 ```
 
 Connector hover state is tracked automatically — `isHovered` is `true` in `ConnectorRendererProps` when a drag line could connect there.
+
+## Node selection
+
+Nodes have built-in selection state:
+
+- Clicking (mousedown) on a node selects it and deselects any selected edge
+- Clicking empty canvas deselects all (via `canvas.props.onMouseDown`)
+- `node.isSelected` is `true` on the render data for the selected node
+
+Use `isSelected` in your rendering to show visual feedback:
+
+```tsx
+{elements.nodes.map((node) => (
+  <g key={node.id} transform={node.transform}>
+    {node.isSelected && (
+      <rect x={-22} y={-12} width={44} height={24}
+            fill="none" stroke="#3182ce" strokeWidth={0.5}
+            strokeDasharray="2 1" />
+    )}
+    <NodeComponent {...node.nodeProps} />
+  </g>
+))}
+```
 
 ## Edge selection
 

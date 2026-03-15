@@ -50,6 +50,7 @@ type UseSolmuParams = {
   };
   onNodeMove?: (nodeId: string, x: number, y: number) => void;
   onConnect?: (source: EdgeNode, target: EdgeNode) => void;
+  onNodeClick?: (nodeId: string) => void;
   onEdgeClick?: (edgeId: string) => void;
   onEdgePathChange?: (edgeId: string, waypoints: { x: number; y: number }[]) => void;
 };
@@ -183,6 +184,8 @@ type SolmuRenderEdge = Edge & {
   path: string;                           // SVG path d attribute
   labelPoint: { x: number; y: number };   // midpoint for label placement
   labelAngle: number;                     // tangent angle at midpoint (degrees)
+  sourceLabelPoint: { x: number; y: number }; // near source endpoint for labels
+  targetLabelPoint: { x: number; y: number }; // near target endpoint for labels
   isSelected?: boolean;
   onClick?: () => void;
   resolvedWaypoints: { x: number; y: number }[];  // full path as points
@@ -332,6 +335,8 @@ type RouteResult = {
   labelPoint: Point;         // midpoint along the path
   labelAngle: number;        // tangent angle at midpoint (degrees)
   resolvedPoints: Point[];   // full path as point array
+  sourceLabelPoint: Point;   // near source endpoint for labels
+  targetLabelPoint: Point;   // near target endpoint for labels
 };
 ```
 

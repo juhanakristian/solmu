@@ -257,8 +257,24 @@ function DatabaseCanvas({
       {/* Nodes */}
       {elements.nodes.map((node: any) => {
         const NodeComponent = node.renderer;
+        const info = TABLE_DATA[node.id];
+        const dim = info ? measureTable(info) : { width: 30, height: 20 };
         return (
           <g key={node.id} transform={node.transform}>
+            {/* Selection outline */}
+            {node.isSelected && (
+              <rect
+                x={-dim.width / 2 - 1}
+                y={-dim.height / 2 - 1}
+                width={dim.width + 2}
+                height={dim.height + 2}
+                fill="none"
+                stroke="#3182ce"
+                strokeWidth={0.5}
+                strokeDasharray="2 1"
+                rx={1}
+              />
+            )}
             <g transform={node.rotation ? `rotate(${node.rotation})` : undefined}>
               <NodeComponent {...node.nodeProps} />
             </g>
@@ -453,6 +469,7 @@ export default function DatabaseDiagramApp() {
     config,
     onNodeMove,
     onConnect,
+    onNodeClick: (nodeId: string) => { /* selection handled internally */ },
     onEdgeClick,
     onEdgePathChange,
   });
@@ -606,29 +623,31 @@ export default function DatabaseDiagramApp() {
             height: "100%",
           }}
         >
-          {/* Cardinality labels */}
+          {/* Cardinality labels at edge endpoints */}
           {cardinalityLabels.map((cl) => {
             const edge = elements.edges[cl.edgeIndex];
             if (!edge) return null;
-            const x = edge.labelPoint.x;
-            const y = edge.labelPoint.y;
             return (
               <g key={`card-${cl.edgeIndex}`}>
                 <text
-                  x={x - 3} y={y + 2}
+                  x={edge.sourceLabelPoint.x}
+                  y={edge.sourceLabelPoint.y}
                   textAnchor="middle"
+                  dominantBaseline="middle"
                   fill="#4a5568"
-                  fontSize={2}
+                  fontSize={2.2}
                   fontFamily="sans-serif"
                   fontWeight="bold"
                 >
                   {cl.sourceLabel}
                 </text>
                 <text
-                  x={x + 3} y={y + 2}
+                  x={edge.targetLabelPoint.x}
+                  y={edge.targetLabelPoint.y}
                   textAnchor="middle"
+                  dominantBaseline="middle"
                   fill="#4a5568"
-                  fontSize={2}
+                  fontSize={2.2}
                   fontFamily="sans-serif"
                   fontWeight="bold"
                 >

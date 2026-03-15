@@ -50,6 +50,7 @@ export function useSolmu({
   data,
   onNodeMove,
   onConnect,
+  onNodeClick,
   onEdgeClick,
   onEdgePathChange,
   config,
@@ -70,6 +71,7 @@ export function useSolmu({
   }, [config.viewport]);
   const [dragItem, setDragItem] = React.useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = React.useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
 
   // Edge segment dragging state
   const [dragSegment, setDragSegment] = React.useState<{
@@ -98,6 +100,7 @@ export function useSolmu({
 
   function onMouseDown(_event: React.MouseEvent, id: string) {
     setDragItem(id);
+    handleNodeClick(id);
   }
 
   function onMouseUp(_event: React.MouseEvent) {
@@ -268,8 +271,17 @@ export function useSolmu({
     }
   }
 
+  function handleNodeClick(nodeId: string) {
+    setSelectedNodeId(nodeId);
+    setSelectedEdgeId(null); // deselect edge when selecting a node
+    if (onNodeClick) {
+      onNodeClick(nodeId);
+    }
+  }
+
   function handleEdgeClick(edgeId: string) {
     setSelectedEdgeId(edgeId);
+    setSelectedNodeId(null); // deselect node when selecting an edge
     if (onEdgeClick) {
       onEdgeClick(edgeId);
     }
@@ -278,7 +290,10 @@ export function useSolmu({
   // Helper functions for rendering
   const createNodeProps = (node: typeof data.nodes[0]) => ({
     node,
-    onMouseDown: (e: React.MouseEvent) => onMouseDown(e, node.id),
+    onMouseDown: (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onMouseDown(e, node.id);
+    },
     onMouseUp,
   });
 
@@ -316,7 +331,7 @@ export function useSolmu({
     : getNodeBounds(data.nodes, undefined, config.routing?.nodeDimensions);
 
   const createEdgeRoute = (edge: typeof data.edges[0]) => {
-    const fallback = { path: "", labelPoint: { x: 0, y: 0 }, labelAngle: 0, resolvedPoints: [] as Point[] };
+    const fallback = { path: "", labelPoint: { x: 0, y: 0 }, labelAngle: 0, resolvedPoints: [] as Point[], sourceLabelPoint: { x: 0, y: 0 }, targetLabelPoint: { x: 0, y: 0 } };
 
     const source = data.nodes.find((n) => n.id === edge.source.node);
     const target = data.nodes.find((n) => n.id === edge.target.node);
@@ -336,11 +351,20 @@ export function useSolmu({
 
     // Legacy "line" type - simple direct line
     if (edge.type === "line") {
+      const resolvedPoints = [start, end];
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      const nx = len > 0 ? -dy / len : 0;
+      const ny = len > 0 ? dx / len : 0;
+      const t = len > 0 ? Math.min(8 / len, 0.5) : 0;
       return {
         path: `M${x1},${y1} L ${x2},${y2}`,
         labelPoint: { x: (x1 + x2) / 2, y: (y1 + y2) / 2 },
         labelAngle: Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI),
-        resolvedPoints: [start, end],
+        resolvedPoints,
+        sourceLabelPoint: { x: x1 + dx * t + nx * 4, y: y1 + dy * t + ny * 4 },
+        targetLabelPoint: { x: x2 - dx * t + nx * 4, y: y2 - dy * t + ny * 4 },
       };
     }
 
@@ -421,8 +445,9 @@ export function useSolmu({
     canvas: {
       props: {
         onMouseDown: (_event: React.MouseEvent) => {
-          // Deselect edge when clicking on empty canvas
+          // Deselect when clicking on empty canvas
           setSelectedEdgeId(null);
+          setSelectedNodeId(null);
         },
         onMouseMove,
         onMouseUp,
@@ -453,10 +478,11 @@ export function useSolmu({
           connectorProps: createConnectorProps(node),
           transform: `translate(${node.x}, ${node.y})`,
           isDragging: dragItem === node.id,
+          isSelected: selectedNodeId === node.id,
         };
       }),
       edges: data.edges.map((edge, index) => {
-        const { path, labelPoint, labelAngle, resolvedPoints } = createEdgeRoute(edge);
+        const { path, labelPoint, labelAngle, resolvedPoints, sourceLabelPoint, targetLabelPoint } = createEdgeRoute(edge);
         const edgeId = `${edge.source.node}-${edge.target.node}-${index}`;
         const segments = computeSegments(resolvedPoints);
         return {
@@ -465,6 +491,8 @@ export function useSolmu({
           path,
           labelPoint,
           labelAngle,
+          sourceLabelPoint,
+          targetLabelPoint,
           isSelected: selectedEdgeId === edgeId,
           onClick: () => handleEdgeClick(edgeId),
           resolvedWaypoints: resolvedPoints,
@@ -484,8 +512,9 @@ export function useSolmu({
     },
     interactions: {
       onMouseDown: (_event: React.MouseEvent) => {
-        // Deselect edge when clicking on empty canvas
+        // Deselect when clicking on empty canvas
         setSelectedEdgeId(null);
+        setSelectedNodeId(null);
       },
       onMouseMove,
       onMouseUp,
