@@ -119,7 +119,7 @@ export type SolmuRenderEdge = Edge & {
   sourceLabelPoint: { x: number; y: number };
   targetLabelPoint: { x: number; y: number };
   isSelected?: boolean;
-  onClick?: () => void;
+  onClick?: (event?: React.MouseEvent) => void;
   resolvedWaypoints: { x: number; y: number }[];
   segments: EdgeSegment[];
   onSegmentDragStart?: (segmentIndex: number, event: React.MouseEvent) => void;
@@ -134,10 +134,23 @@ export type SolmuDragLine = {
   isVisible: boolean;
 };
 
+export type SolmuMarquee = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type SolmuSelection = {
+  nodeIds: string[];
+  edgeIds: string[];
+};
+
 export type SolmuElements = {
   nodes: SolmuRenderNode<any>[];
   edges: SolmuRenderEdge[];
   dragLine: SolmuDragLine | null;
+  marquee: SolmuMarquee | null;
 };
 
 export type SolmuInteractions = {
@@ -150,6 +163,7 @@ export type UseSolmuResult = {
   canvas: SolmuCanvas;
   elements: SolmuElements;
   interactions: SolmuInteractions;
+  selection: SolmuSelection;
 };
 
 import type { RoutingMode } from './routing';
@@ -216,4 +230,5 @@ export type UseSolmuParams = {
   onNodeClick?: (nodeId: string) => void;
   onEdgeClick?: (edgeId: string) => void;
   onEdgePathChange?: (edgeId: string, waypoints: { x: number; y: number }[]) => void;
+  onSelectionChange?: (selection: SolmuSelection) => void;
 };

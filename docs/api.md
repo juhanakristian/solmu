@@ -52,6 +52,7 @@ type UseSolmuParams = {
   onConnect?: (source: EdgeNode, target: EdgeNode) => void;
   onNodeClick?: (nodeId: string) => void;
   onEdgeClick?: (edgeId: string) => void;
+  onSelectionChange?: (selection: SolmuSelection) => void;
   onEdgePathChange?: (edgeId: string, waypoints: { x: number; y: number }[]) => void;
 };
 ```
@@ -63,6 +64,7 @@ type UseSolmuResult = {
   canvas: SolmuCanvas;
   elements: SolmuElements;
   interactions: SolmuInteractions;
+  selection: SolmuSelection;
 };
 ```
 
@@ -215,6 +217,26 @@ type SolmuDragLine = {
 };
 ```
 
+### `SolmuSelection`
+
+```ts
+type SolmuSelection = {
+  nodeIds: string[];
+  edgeIds: string[];
+};
+```
+
+### `SolmuMarquee`
+
+```ts
+type SolmuMarquee = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+```
+
 ### `SolmuElements`
 
 ```ts
@@ -222,6 +244,7 @@ type SolmuElements = {
   nodes: SolmuRenderNode<any>[];
   edges: SolmuRenderEdge[];
   dragLine: SolmuDragLine | null;
+  marquee: SolmuMarquee | null;
 };
 ```
 

@@ -53,6 +53,7 @@ export function useSolmu({
   onNodeClick,
   onEdgeClick,
   onEdgePathChange,
+  onSelectionChange,
   config,
 }: UseSolmuParams): UseSolmuResult {
   // Create viewport instance with default or provided config
@@ -70,8 +71,17 @@ export function useSolmu({
     });
   }, [config.viewport]);
   const [dragItem, setDragItem] = React.useState<string | null>(null);
-  const [selectedEdgeId, setSelectedEdgeId] = React.useState<string | null>(null);
-  const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
+
+  // Multi-selection state
+  const [selectedNodeIds, setSelectedNodeIds] = React.useState<Set<string>>(new Set());
+  const [selectedEdgeIds, setSelectedEdgeIds] = React.useState<Set<string>>(new Set());
+
+  // Marquee (rubber-band) selection state
+  const [marquee, setMarquee] = React.useState<{
+    startWorld: Point;
+    currentWorld: Point;
+    active: boolean;
+  } | null>(null);
 
   // Edge segment dragging state
   const [dragSegment, setDragSegment] = React.useState<{
@@ -98,14 +108,32 @@ export function useSolmu({
     cy2: number;
   } | null>(null);
 
-  function onMouseDown(_event: React.MouseEvent, id: string) {
+  function onMouseDown(event: React.MouseEvent, id: string) {
     setDragItem(id);
-    handleNodeClick(id);
+    handleNodeClick(id, event.shiftKey);
   }
 
   function onMouseUp(_event: React.MouseEvent) {
     if (dragItem) setDragItem(null);
     if (dragSegment) setDragSegment(null);
+    // Finish marquee selection
+    if (marquee) {
+      if (marquee.active) {
+        const rect = marqueeRect(marquee.startWorld, marquee.currentWorld);
+        const nodesInRect = data.nodes.filter((node) =>
+          node.x >= rect.x && node.x <= rect.x + rect.width &&
+          node.y >= rect.y && node.y <= rect.y + rect.height
+        );
+        const newNodeIds = new Set(nodesInRect.map((n) => n.id));
+        setSelectedNodeIds(newNodeIds);
+        setSelectedEdgeIds(new Set());
+        notifySelectionChange(newNodeIds, new Set());
+      } else {
+        // Was just a click on empty canvas — deselect all
+        clearSelection();
+      }
+      setMarquee(null);
+    }
     if (dragConnector) {
       if (hoverConnector && onConnect) {
         onConnect(
@@ -117,42 +145,74 @@ export function useSolmu({
     }
   }
 
+  // Convert a mouse event to world coordinates via SVG CTM
+  function eventToWorld(event: React.MouseEvent): Point | null {
+    const svg = (event.target as Element).closest('svg');
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    const svgPoint = svg.createSVGPoint();
+    svgPoint.x = event.clientX - rect.left;
+    svgPoint.y = event.clientY - rect.top;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return null;
+    const wp = svgPoint.matrixTransform(ctm.inverse());
+    return { x: wp.x, y: wp.y };
+  }
+
   function onMouseMove(event: React.MouseEvent) {
     if (dragItem && onNodeMove) {
       const node = data.nodes.find((n) => n.id === dragItem);
       if (!node) return;
 
-      // With viewBox handling zoom/pan, we can use SVG coordinate conversion
-      const svg = (event.target as Element).closest('svg');
-      if (svg) {
-        const rect = svg.getBoundingClientRect();
-        const svgPoint = svg.createSVGPoint();
-        svgPoint.x = event.clientX - rect.left;
-        svgPoint.y = event.clientY - rect.top;
-        
-        // Convert screen coordinates to SVG world coordinates
-        const ctm = svg.getScreenCTM();
-        if (ctm) {
-          const worldPoint = svgPoint.matrixTransform(ctm.inverse());
-          
-          // Apply grid snapping if enabled
-          const snapped = viewport.snapToGrid({ x: worldPoint.x, y: worldPoint.y });
-          
-          onNodeMove(dragItem, snapped.x, snapped.y);
+      const worldPoint = eventToWorld(event);
+      if (worldPoint) {
+        const snapped = viewport.snapToGrid(worldPoint);
+        const deltaX = snapped.x - node.x;
+        const deltaY = snapped.y - node.y;
 
-          // Clear waypoints on all edges connected to the dragged node
-          // so they get auto-routed to follow the node's new position
-          if (onEdgePathChange) {
-            data.edges.forEach((edge, index) => {
-              if (edge.waypoints && edge.waypoints.length > 0) {
-                if (edge.source.node === dragItem || edge.target.node === dragItem) {
-                  const edgeId = `${edge.source.node}-${edge.target.node}-${index}`;
-                  onEdgePathChange(edgeId, []);
-                }
-              }
-            });
+        // Move the dragged node
+        onNodeMove(dragItem, snapped.x, snapped.y);
+
+        // Move other selected nodes by the same delta (multi-drag)
+        if (selectedNodeIds.has(dragItem) && selectedNodeIds.size > 1) {
+          for (const selectedId of selectedNodeIds) {
+            if (selectedId === dragItem) continue;
+            const selectedNode = data.nodes.find((n) => n.id === selectedId);
+            if (selectedNode) {
+              onNodeMove(selectedId, selectedNode.x + deltaX, selectedNode.y + deltaY);
+            }
           }
         }
+
+        // Clear waypoints on all edges connected to any moved node
+        if (onEdgePathChange) {
+          const movedNodeIds = selectedNodeIds.has(dragItem) && selectedNodeIds.size > 1
+            ? selectedNodeIds
+            : new Set([dragItem]);
+          data.edges.forEach((edge, index) => {
+            if (edge.waypoints && edge.waypoints.length > 0) {
+              if (movedNodeIds.has(edge.source.node) || movedNodeIds.has(edge.target.node)) {
+                const edgeId = `${edge.source.node}-${edge.target.node}-${index}`;
+                onEdgePathChange(edgeId, []);
+              }
+            }
+          });
+        }
+      }
+    }
+
+    // Marquee selection drag
+    if (marquee) {
+      const worldPoint = eventToWorld(event);
+      if (worldPoint) {
+        const dx = worldPoint.x - marquee.startWorld.x;
+        const dy = worldPoint.y - marquee.startWorld.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        setMarquee({
+          startWorld: marquee.startWorld,
+          currentWorld: worldPoint,
+          active: marquee.active || dist > 2,
+        });
       }
     }
 
@@ -271,17 +331,74 @@ export function useSolmu({
     }
   }
 
-  function handleNodeClick(nodeId: string) {
-    setSelectedNodeId(nodeId);
-    setSelectedEdgeId(null); // deselect edge when selecting a node
+  function notifySelectionChange(nodeIds: Set<string>, edgeIds: Set<string>) {
+    if (onSelectionChange) {
+      onSelectionChange({
+        nodeIds: Array.from(nodeIds),
+        edgeIds: Array.from(edgeIds),
+      });
+    }
+  }
+
+  function clearSelection() {
+    setSelectedNodeIds(new Set());
+    setSelectedEdgeIds(new Set());
+    notifySelectionChange(new Set(), new Set());
+  }
+
+  function marqueeRect(start: Point, end: Point) {
+    const x = Math.min(start.x, end.x);
+    const y = Math.min(start.y, end.y);
+    return {
+      x,
+      y,
+      width: Math.abs(end.x - start.x),
+      height: Math.abs(end.y - start.y),
+    };
+  }
+
+  function handleNodeClick(nodeId: string, shiftKey: boolean = false) {
+    let newNodeIds: Set<string>;
+    if (shiftKey) {
+      // Toggle in/out of selection
+      newNodeIds = new Set(selectedNodeIds);
+      if (newNodeIds.has(nodeId)) {
+        newNodeIds.delete(nodeId);
+      } else {
+        newNodeIds.add(nodeId);
+      }
+    } else if (selectedNodeIds.has(nodeId)) {
+      // Clicking an already-selected node: keep selection (for multi-drag)
+      return;
+    } else {
+      // Replace selection with just this node
+      newNodeIds = new Set([nodeId]);
+    }
+    const newEdgeIds = shiftKey ? selectedEdgeIds : new Set<string>();
+    setSelectedNodeIds(newNodeIds);
+    setSelectedEdgeIds(newEdgeIds);
+    notifySelectionChange(newNodeIds, newEdgeIds);
     if (onNodeClick) {
       onNodeClick(nodeId);
     }
   }
 
-  function handleEdgeClick(edgeId: string) {
-    setSelectedEdgeId(edgeId);
-    setSelectedNodeId(null); // deselect node when selecting an edge
+  function handleEdgeClick(edgeId: string, shiftKey: boolean = false) {
+    let newEdgeIds: Set<string>;
+    if (shiftKey) {
+      newEdgeIds = new Set(selectedEdgeIds);
+      if (newEdgeIds.has(edgeId)) {
+        newEdgeIds.delete(edgeId);
+      } else {
+        newEdgeIds.add(edgeId);
+      }
+    } else {
+      newEdgeIds = new Set([edgeId]);
+    }
+    const newNodeIds = shiftKey ? selectedNodeIds : new Set<string>();
+    setSelectedNodeIds(newNodeIds);
+    setSelectedEdgeIds(newEdgeIds);
+    notifySelectionChange(newNodeIds, newEdgeIds);
     if (onEdgeClick) {
       onEdgeClick(edgeId);
     }
@@ -294,7 +411,7 @@ export function useSolmu({
       e.stopPropagation();
       onMouseDown(e, node.id);
     },
-    onMouseUp,
+    onMouseUp: (e: React.MouseEvent) => onMouseUp(e),
   });
 
   const createConnectorProps = (node: typeof data.nodes[0]) => {
@@ -441,13 +558,34 @@ export function useSolmu({
     handleEdgeClick(edgeId);
   }
 
+  // Ctrl+A / Cmd+A to select all
+  React.useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.target as HTMLElement)?.tagName === "INPUT" || (e.target as HTMLElement)?.tagName === "TEXTAREA") return;
+      if ((e.ctrlKey || e.metaKey) && e.key === "a") {
+        e.preventDefault();
+        const allNodeIds = new Set(data.nodes.map((n) => n.id));
+        const allEdgeIds = new Set(
+          data.edges.map((edge, index) => `${edge.source.node}-${edge.target.node}-${index}`)
+        );
+        setSelectedNodeIds(allNodeIds);
+        setSelectedEdgeIds(allEdgeIds);
+        notifySelectionChange(allNodeIds, allEdgeIds);
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [data.nodes, data.edges]);
+
   return {
     canvas: {
       props: {
-        onMouseDown: (_event: React.MouseEvent) => {
-          // Deselect when clicking on empty canvas
-          setSelectedEdgeId(null);
-          setSelectedNodeId(null);
+        onMouseDown: (event: React.MouseEvent) => {
+          // Start marquee selection (deselect happens on mouseup if no drag)
+          const worldPoint = eventToWorld(event);
+          if (worldPoint) {
+            setMarquee({ startWorld: worldPoint, currentWorld: worldPoint, active: false });
+          }
         },
         onMouseMove,
         onMouseUp,
@@ -478,7 +616,7 @@ export function useSolmu({
           connectorProps: createConnectorProps(node),
           transform: `translate(${node.x}, ${node.y})`,
           isDragging: dragItem === node.id,
-          isSelected: selectedNodeId === node.id,
+          isSelected: selectedNodeIds.has(node.id),
         };
       }),
       edges: data.edges.map((edge, index) => {
@@ -493,8 +631,8 @@ export function useSolmu({
           labelAngle,
           sourceLabelPoint,
           targetLabelPoint,
-          isSelected: selectedEdgeId === edgeId,
-          onClick: () => handleEdgeClick(edgeId),
+          isSelected: selectedEdgeIds.has(edgeId),
+          onClick: (event?: React.MouseEvent) => handleEdgeClick(edgeId, event?.shiftKey),
           resolvedWaypoints: resolvedPoints,
           segments,
           onSegmentDragStart: onEdgePathChange
@@ -509,15 +647,23 @@ export function useSolmu({
             isVisible: true,
           }
         : null,
+      marquee: marquee?.active
+        ? marqueeRect(marquee.startWorld, marquee.currentWorld)
+        : null,
     },
     interactions: {
-      onMouseDown: (_event: React.MouseEvent) => {
-        // Deselect when clicking on empty canvas
-        setSelectedEdgeId(null);
-        setSelectedNodeId(null);
+      onMouseDown: (event: React.MouseEvent) => {
+        const worldPoint = eventToWorld(event);
+        if (worldPoint) {
+          setMarquee({ startWorld: worldPoint, currentWorld: worldPoint, active: false });
+        }
       },
       onMouseMove,
       onMouseUp,
+    },
+    selection: {
+      nodeIds: Array.from(selectedNodeIds),
+      edgeIds: Array.from(selectedEdgeIds),
     },
   };
 }
