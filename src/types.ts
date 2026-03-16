@@ -164,6 +164,11 @@ export type UseSolmuResult = {
   elements: SolmuElements;
   interactions: SolmuInteractions;
   selection: SolmuSelection;
+  /** Imperative actions for use with useSolmuKeyboard or custom UI */
+  actions: {
+    selectAll: () => void;
+    deselectAll: () => void;
+  };
 };
 
 import type { RoutingMode } from './routing';

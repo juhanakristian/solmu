@@ -1,5 +1,5 @@
 import React from "react";
-import { useSolmu, DefaultConnectorRenderer, DefaultEdgeRenderer, SolmuMarkerDefs } from "../../../src";
+import { useSolmu, useSolmuKeyboard, DefaultConnectorRenderer, DefaultEdgeRenderer, SolmuMarkerDefs } from "../../../src";
 import type { Edge } from "../../../src/types";
 
 // --- Database Table Renderer ---
@@ -472,7 +472,7 @@ export default function DatabaseDiagramApp() {
     },
   };
 
-  const { canvas, elements, selection } = useSolmu({
+  const { canvas, elements, selection, actions } = useSolmu({
     data,
     config,
     onNodeMove,
@@ -480,16 +480,13 @@ export default function DatabaseDiagramApp() {
     onEdgePathChange,
   });
 
-  // Keyboard handler for deletion
-  React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        deleteSelected();
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selection]);
+  useSolmuKeyboard({
+    actions: {
+      deleteSelected,
+      selectAll: actions.selectAll,
+      deselect: actions.deselectAll,
+    },
+  });
 
   // Zoom and pan
   const handleWheel = (e: React.WheelEvent) => {

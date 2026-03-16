@@ -54,6 +54,7 @@ type UseSolmuParams = {
   onEdgeClick?: (edgeId: string) => void;
   onSelectionChange?: (selection: SolmuSelection) => void;
   onEdgePathChange?: (edgeId: string, waypoints: { x: number; y: number }[]) => void;
+  onEdgePathChange?: (edgeId: string, waypoints: { x: number; y: number }[]) => void;
 };
 ```
 
@@ -65,6 +66,10 @@ type UseSolmuResult = {
   elements: SolmuElements;
   interactions: SolmuInteractions;
   selection: SolmuSelection;
+  actions: {
+    selectAll: () => void;
+    deselectAll: () => void;
+  };
 };
 ```
 
@@ -408,6 +413,53 @@ type ViewportConfig = {
     visible: boolean;
     snap: boolean;
   };
+};
+```
+
+---
+
+## Component props
+
+---
+
+## Keyboard
+
+### `useSolmuKeyboard(params)`
+
+Registers keyboard shortcuts for diagram interactions. See [Keyboard Shortcuts](keyboard.md) for full documentation.
+
+```ts
+function useSolmuKeyboard(params: UseSolmuKeyboardParams): void;
+```
+
+### `UseSolmuKeyboardParams`
+
+```ts
+type UseSolmuKeyboardParams = {
+  bindings?: KeyBinding[];
+  actions?: {
+    deleteSelected?: () => void;
+    selectAll?: () => void;
+    deselect?: () => void;
+    undo?: () => void;
+    redo?: () => void;
+    nudge?: (dx: number, dy: number) => void;
+    nudgeStep?: number;  // default: 1
+  };
+  enabled?: boolean;  // default: true
+};
+```
+
+### `KeyBinding`
+
+```ts
+type KeyBinding = {
+  key: string;
+  mod?: boolean;       // Ctrl / Cmd
+  shift?: boolean;
+  alt?: boolean;
+  action: () => void;
+  passthrough?: boolean;
 };
 ```
 
