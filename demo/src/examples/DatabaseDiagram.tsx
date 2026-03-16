@@ -257,8 +257,24 @@ function DatabaseCanvas({
       {/* Nodes */}
       {elements.nodes.map((node: any) => {
         const NodeComponent = node.renderer;
+        const info = TABLE_DATA[node.id];
+        const dim = info ? measureTable(info) : { width: 30, height: 20 };
         return (
           <g key={node.id} transform={node.transform}>
+            {/* Selection outline */}
+            {node.isSelected && (
+              <rect
+                x={-dim.width / 2 - 1}
+                y={-dim.height / 2 - 1}
+                width={dim.width + 2}
+                height={dim.height + 2}
+                fill="none"
+                stroke="#3182ce"
+                strokeWidth={0.5}
+                strokeDasharray="2 1"
+                rx={1}
+              />
+            )}
             <g transform={node.rotation ? `rotate(${node.rotation})` : undefined}>
               <NodeComponent {...node.nodeProps} />
             </g>
@@ -277,6 +293,21 @@ function DatabaseCanvas({
           strokeWidth="0.3"
           strokeDasharray="1 1"
           fill="none"
+        />
+      )}
+
+      {/* Marquee selection rectangle */}
+      {elements.marquee && (
+        <rect
+          x={elements.marquee.x}
+          y={elements.marquee.y}
+          width={elements.marquee.width}
+          height={elements.marquee.height}
+          fill="rgba(49, 130, 206, 0.12)"
+          stroke="#3182ce"
+          strokeWidth={0.3}
+          strokeDasharray="2 1"
+          pointerEvents="none"
         />
       )}
 
@@ -381,8 +412,6 @@ export default function DatabaseDiagramApp() {
 
   const routingMode = 'orthogonal' as const;
 
-  const [selectedEdgeId, setSelectedEdgeId] = React.useState<string | null>(null);
-
   function onConnect(
     start: { node: string; connector: string },
     end: { node: string; connector: string }
@@ -396,24 +425,19 @@ export default function DatabaseDiagramApp() {
     }));
   }
 
-  function onEdgeClick(edgeId: string) {
-    setSelectedEdgeId(edgeId);
-  }
-
-  function deleteSelectedEdge() {
-    if (selectedEdgeId) {
-      setData((prev) => {
-        const indexToRemove = prev.edges.findIndex((edge, index) => 
-          `${edge.source.node}-${edge.target.node}-${index}` === selectedEdgeId
-        );
-        if (indexToRemove === -1) return prev;
-        
-        const newEdges = [...prev.edges];
-        newEdges.splice(indexToRemove, 1);
-        return { ...prev, edges: newEdges };
-      });
-      setSelectedEdgeId(null);
-    }
+  function deleteSelected() {
+    if (selection.nodeIds.length === 0 && selection.edgeIds.length === 0) return;
+    const nodeSet = new Set(selection.nodeIds);
+    const edgeSet = new Set(selection.edgeIds);
+    setData((prev) => ({
+      ...prev,
+      nodes: prev.nodes.filter((n) => !nodeSet.has(n.id)),
+      edges: prev.edges.filter((edge, index) => {
+        const id = `${edge.source.node}-${edge.target.node}-${index}`;
+        // Remove selected edges and edges connected to deleted nodes
+        return !edgeSet.has(id) && !nodeSet.has(edge.source.node) && !nodeSet.has(edge.target.node);
+      }),
+    }));
   }
 
   function onNodeMove(nodeId: string, x: number, y: number) {
@@ -448,25 +472,24 @@ export default function DatabaseDiagramApp() {
     },
   };
 
-  const { canvas, elements } = useSolmu({
+  const { canvas, elements, selection } = useSolmu({
     data,
     config,
     onNodeMove,
     onConnect,
-    onEdgeClick,
     onEdgePathChange,
   });
 
-  // Keyboard handler for edge deletion
+  // Keyboard handler for deletion
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        deleteSelectedEdge();
+        deleteSelected();
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedEdgeId]);
+  }, [selection]);
 
   // Zoom and pan
   const handleWheel = (e: React.WheelEvent) => {
@@ -583,7 +606,9 @@ export default function DatabaseDiagramApp() {
         <div style={{ fontSize: 11, color: '#a0aec0' }}>Middle/Ctrl+Drag: Pan</div>
         <div style={{ fontSize: 11, color: '#a0aec0' }}>Drag tables to move</div>
         <div style={{ fontSize: 11, color: '#a0aec0' }}>Drag between connectors to link</div>
-        <div style={{ fontSize: 11, color: '#a0aec0' }}>Click edge to select, Delete to remove</div>
+        <div style={{ fontSize: 11, color: '#a0aec0' }}>Click to select, Shift+click multi-select</div>
+        <div style={{ fontSize: 11, color: '#a0aec0' }}>Drag empty area: marquee select</div>
+        <div style={{ fontSize: 11, color: '#a0aec0' }}>Ctrl+A: select all, Delete: remove</div>
         <div style={{ marginTop: 8, fontSize: 10, color: '#718096' }}>
           <span style={{ color: '#d69e2e' }}>🔑</span> Primary Key · <span style={{ color: '#3182ce' }}>🔗</span> Foreign Key
         </div>
@@ -606,29 +631,31 @@ export default function DatabaseDiagramApp() {
             height: "100%",
           }}
         >
-          {/* Cardinality labels */}
+          {/* Cardinality labels at edge endpoints */}
           {cardinalityLabels.map((cl) => {
             const edge = elements.edges[cl.edgeIndex];
             if (!edge) return null;
-            const x = edge.labelPoint.x;
-            const y = edge.labelPoint.y;
             return (
               <g key={`card-${cl.edgeIndex}`}>
                 <text
-                  x={x - 3} y={y + 2}
+                  x={edge.sourceLabelPoint.x}
+                  y={edge.sourceLabelPoint.y}
                   textAnchor="middle"
+                  dominantBaseline="middle"
                   fill="#4a5568"
-                  fontSize={2}
+                  fontSize={2.2}
                   fontFamily="sans-serif"
                   fontWeight="bold"
                 >
                   {cl.sourceLabel}
                 </text>
                 <text
-                  x={x + 3} y={y + 2}
+                  x={edge.targetLabelPoint.x}
+                  y={edge.targetLabelPoint.y}
                   textAnchor="middle"
+                  dominantBaseline="middle"
                   fill="#4a5568"
-                  fontSize={2}
+                  fontSize={2.2}
                   fontFamily="sans-serif"
                   fontWeight="bold"
                 >

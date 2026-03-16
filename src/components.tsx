@@ -68,7 +68,7 @@ export function DefaultEdgeRenderer({ edge }: EdgeRendererProps) {
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (edge.onClick) {
-      edge.onClick();
+      edge.onClick(e);
     }
   };
 
@@ -207,6 +207,21 @@ export function SolmuCanvas({
           stroke="#64ffda"
           strokeWidth="0.4"
           fill="none"
+        />
+      )}
+
+      {/* Marquee selection rectangle */}
+      {elements.marquee && (
+        <rect
+          x={elements.marquee.x}
+          y={elements.marquee.y}
+          width={elements.marquee.width}
+          height={elements.marquee.height}
+          fill="rgba(100, 149, 237, 0.15)"
+          stroke="#6495ed"
+          strokeWidth={0.3}
+          strokeDasharray="2 1"
+          pointerEvents="none"
         />
       )}
 

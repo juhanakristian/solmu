@@ -50,7 +50,9 @@ type UseSolmuParams = {
   };
   onNodeMove?: (nodeId: string, x: number, y: number) => void;
   onConnect?: (source: EdgeNode, target: EdgeNode) => void;
+  onNodeClick?: (nodeId: string) => void;
   onEdgeClick?: (edgeId: string) => void;
+  onSelectionChange?: (selection: SolmuSelection) => void;
   onEdgePathChange?: (edgeId: string, waypoints: { x: number; y: number }[]) => void;
 };
 ```
@@ -62,6 +64,7 @@ type UseSolmuResult = {
   canvas: SolmuCanvas;
   elements: SolmuElements;
   interactions: SolmuInteractions;
+  selection: SolmuSelection;
 };
 ```
 
@@ -183,6 +186,8 @@ type SolmuRenderEdge = Edge & {
   path: string;                           // SVG path d attribute
   labelPoint: { x: number; y: number };   // midpoint for label placement
   labelAngle: number;                     // tangent angle at midpoint (degrees)
+  sourceLabelPoint: { x: number; y: number }; // near source endpoint for labels
+  targetLabelPoint: { x: number; y: number }; // near target endpoint for labels
   isSelected?: boolean;
   onClick?: () => void;
   resolvedWaypoints: { x: number; y: number }[];  // full path as points
@@ -212,6 +217,26 @@ type SolmuDragLine = {
 };
 ```
 
+### `SolmuSelection`
+
+```ts
+type SolmuSelection = {
+  nodeIds: string[];
+  edgeIds: string[];
+};
+```
+
+### `SolmuMarquee`
+
+```ts
+type SolmuMarquee = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+```
+
 ### `SolmuElements`
 
 ```ts
@@ -219,6 +244,7 @@ type SolmuElements = {
   nodes: SolmuRenderNode<any>[];
   edges: SolmuRenderEdge[];
   dragLine: SolmuDragLine | null;
+  marquee: SolmuMarquee | null;
 };
 ```
 
@@ -332,6 +358,8 @@ type RouteResult = {
   labelPoint: Point;         // midpoint along the path
   labelAngle: number;        // tangent angle at midpoint (degrees)
   resolvedPoints: Point[];   // full path as point array
+  sourceLabelPoint: Point;   // near source endpoint for labels
+  targetLabelPoint: Point;   // near target endpoint for labels
 };
 ```
 

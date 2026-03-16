@@ -17,6 +17,17 @@ const { canvas, elements } = useSolmu({
 });
 ```
 
+### `onNodeClick(nodeId)`
+
+Called when a node is clicked (mousedown). The node is internally selected (`node.isSelected = true`), and any selected edge is deselected:
+
+```tsx
+function onNodeClick(nodeId: string) {
+  setSelectedTable(nodeId);
+  // open property panel, show details, etc.
+}
+```
+
 ### `onNodeMove(nodeId, x, y)`
 
 Called on every mouse move while a node is being dragged. Update the node position in your state:
@@ -124,47 +135,105 @@ The drag line is available as `elements.dragLine`:
 
 Connector hover state is tracked automatically — `isHovered` is `true` in `ConnectorRendererProps` when a drag line could connect there.
 
-## Edge selection
+## Selection
 
-Edges have built-in selection state:
-
-- Clicking an edge calls `edge.onClick()` → selects it internally and calls `onEdgeClick`
-- Starting a segment drag selects the edge
-- Clicking empty canvas deselects (via `canvas.props.onMouseDown`)
-
-Check `edge.isSelected` in your renderer:
+Solmu supports multi-selection of both nodes and edges. The selection state is managed internally and returned from `useSolmu`:
 
 ```tsx
-<path
-  d={edge.path}
-  stroke={edge.isSelected ? "#ff0" : "#333"}
-  strokeWidth={edge.isSelected ? 0.8 : 0.4}
-  onClick={(e) => { e.stopPropagation(); edge.onClick?.(); }}
-/>
+const { canvas, elements, selection } = useSolmu({ data, config, ... });
+
+// selection.nodeIds: string[]  — currently selected node IDs
+// selection.edgeIds: string[]  — currently selected edge IDs
 ```
 
-### Edge deletion
+### Selection behavior
 
-Solmu doesn't handle deletion directly — implement it with a keyboard listener:
+| Action | Effect |
+|--------|--------|
+| Click node | Select only that node, deselect edges |
+| Click edge | Select only that edge, deselect nodes |
+| Shift+click node | Toggle node in/out of selection |
+| Shift+click edge | Toggle edge in/out of selection |
+| Click empty canvas | Deselect all |
+| Drag on empty canvas | Marquee (rubber-band) select — all nodes within the rectangle are selected |
+| Ctrl+A / Cmd+A | Select all nodes and edges |
+
+### Visual feedback
+
+Check `isSelected` on nodes and edges:
 
 ```tsx
+{elements.nodes.map((node) => (
+  <g key={node.id} transform={node.transform}>
+    {node.isSelected && (
+      <rect x={-22} y={-12} width={44} height={24}
+            fill="none" stroke="#3182ce" strokeWidth={0.5}
+            strokeDasharray="2 1" />
+    )}
+    <NodeComponent {...node.nodeProps} />
+  </g>
+))}
+```
+
+### Multi-drag
+
+When multiple nodes are selected and you drag any of them, all selected nodes move together by the same delta.
+
+### Marquee selection
+
+Dragging on empty canvas draws a selection rectangle. On release, all nodes whose positions fall within the rectangle are selected. The marquee rectangle is available in `elements.marquee` for rendering:
+
+```tsx
+{elements.marquee && (
+  <rect
+    x={elements.marquee.x} y={elements.marquee.y}
+    width={elements.marquee.width} height={elements.marquee.height}
+    fill="rgba(100, 149, 237, 0.15)" stroke="#6495ed"
+    strokeWidth={0.3} strokeDasharray="2 1" pointerEvents="none"
+  />
+)}
+```
+
+The built-in `SolmuCanvas` component renders the marquee automatically.
+
+### Selection change callback
+
+```tsx
+const { canvas, elements, selection } = useSolmu({
+  data,
+  config: { ... },
+  onSelectionChange: (selection) => {
+    console.log("Selected nodes:", selection.nodeIds);
+    console.log("Selected edges:", selection.edgeIds);
+  },
+});
+```
+
+### Deletion
+
+Use the `selection` return value to implement deletion:
+
+```tsx
+function deleteSelected() {
+  const nodeSet = new Set(selection.nodeIds);
+  const edgeSet = new Set(selection.edgeIds);
+  setData((prev) => ({
+    ...prev,
+    nodes: prev.nodes.filter((n) => !nodeSet.has(n.id)),
+    edges: prev.edges.filter((edge, index) => {
+      const id = `${edge.source.node}-${edge.target.node}-${index}`;
+      return !edgeSet.has(id) && !nodeSet.has(edge.source.node) && !nodeSet.has(edge.target.node);
+    }),
+  }));
+}
+
 React.useEffect(() => {
   const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === "Delete" || e.key === "Backspace") {
-      if (selectedEdgeId) {
-        setData((prev) => ({
-          ...prev,
-          edges: prev.edges.filter((_, i) => {
-            const id = `${prev.edges[i].source.node}-${prev.edges[i].target.node}-${i}`;
-            return id !== selectedEdgeId;
-          }),
-        }));
-      }
-    }
+    if (e.key === "Delete" || e.key === "Backspace") deleteSelected();
   };
   document.addEventListener("keydown", handleKeyDown);
   return () => document.removeEventListener("keydown", handleKeyDown);
-}, [selectedEdgeId]);
+}, [selection]);
 ```
 
 ## Edge segment dragging

@@ -132,6 +132,8 @@ Each edge in `elements.edges` includes:
 | `path` | `string` | SVG path string (`d` attribute) |
 | `labelPoint` | `{ x, y }` | Midpoint along the path for label positioning |
 | `labelAngle` | `number` | Tangent angle in degrees at the label point |
+| `sourceLabelPoint` | `{ x, y }` | Position near the source endpoint for labels (e.g. cardinality) |
+| `targetLabelPoint` | `{ x, y }` | Position near the target endpoint for labels |
 | `isSelected` | `boolean` | Whether this edge is currently selected |
 | `onClick` | `() => void` | Click handler for selection |
 | `resolvedWaypoints` | `{ x, y }[]` | Full path as point array (including start/end) |
@@ -164,6 +166,27 @@ Use `labelPoint` and `labelAngle` to position labels at the midpoint of any edge
   </text>
 ))}
 ```
+
+### Endpoint labels (cardinality)
+
+For ER diagrams and similar, use `sourceLabelPoint` and `targetLabelPoint` to place labels near each endpoint. These are offset along and perpendicular to the first/last path segment so they sit beside the edge near the connector:
+
+```tsx
+{elements.edges.map((edge) => (
+  <g key={`card-${edge.id}`}>
+    <text x={edge.sourceLabelPoint.x} y={edge.sourceLabelPoint.y}
+          textAnchor="middle" dominantBaseline="middle" fontSize={2.2}>
+      1
+    </text>
+    <text x={edge.targetLabelPoint.x} y={edge.targetLabelPoint.y}
+          textAnchor="middle" dominantBaseline="middle" fontSize={2.2}>
+      *
+    </text>
+  </g>
+))}
+```
+
+The label positions update automatically when nodes move or edges are rerouted.
 
 ## Manual edge editing
 
