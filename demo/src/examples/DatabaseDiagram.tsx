@@ -445,7 +445,7 @@ export default function DatabaseDiagramApp() {
       ...prev,
       edges: [
         ...prev.edges,
-        { source: start, target: end, type: routingMode } as Edge,
+        { source: start, target: end, type: routingMode, style: { stroke: "#4a5568", strokeWidth: 0.3, markerEnd: "arrow-open" } } as Edge,
       ],
     }));
   }
