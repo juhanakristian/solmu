@@ -145,16 +145,17 @@ export function useSolmu({
     }
   }
 
-  // Convert a mouse event to world coordinates via SVG CTM
+  // Convert a mouse event to world coordinates via SVG CTM.
+  // getScreenCTM() maps SVG user units to CSS viewport pixels (clientX/clientY),
+  // so its inverse converts clientX/clientY directly to world coords.
   function eventToWorld(event: React.MouseEvent): Point | null {
     const svg = (event.target as Element).closest('svg');
     if (!svg) return null;
-    const rect = svg.getBoundingClientRect();
-    const svgPoint = svg.createSVGPoint();
-    svgPoint.x = event.clientX - rect.left;
-    svgPoint.y = event.clientY - rect.top;
     const ctm = svg.getScreenCTM();
     if (!ctm) return null;
+    const svgPoint = svg.createSVGPoint();
+    svgPoint.x = event.clientX;
+    svgPoint.y = event.clientY;
     const wp = svgPoint.matrixTransform(ctm.inverse());
     return { x: wp.x, y: wp.y };
   }
@@ -219,13 +220,11 @@ export function useSolmu({
     if (dragSegment && onEdgePathChange) {
       const svg = (event.target as Element).closest('svg');
       if (svg) {
-        const rect = svg.getBoundingClientRect();
-        const svgPoint = svg.createSVGPoint();
-        svgPoint.x = event.clientX - rect.left;
-        svgPoint.y = event.clientY - rect.top;
-
         const ctm = svg.getScreenCTM();
         if (ctm) {
+          const svgPoint = svg.createSVGPoint();
+          svgPoint.x = event.clientX;
+          svgPoint.y = event.clientY;
           const worldPoint = svgPoint.matrixTransform(ctm.inverse());
           const snapped = viewport.snapToGrid({ x: worldPoint.x, y: worldPoint.y });
 
@@ -277,14 +276,11 @@ export function useSolmu({
           // Use SVG coordinate conversion for drag line endpoint
           const svg = (event.target as Element).closest('svg');
           if (svg) {
-            const rect = svg.getBoundingClientRect();
-            const svgPoint = svg.createSVGPoint();
-            svgPoint.x = event.clientX - rect.left;
-            svgPoint.y = event.clientY - rect.top;
-            
             const ctm = svg.getScreenCTM();
             if (ctm) {
-              // Convert point to world coordinates
+              const svgPoint = svg.createSVGPoint();
+              svgPoint.x = event.clientX;
+              svgPoint.y = event.clientY;
               const worldPoint = svgPoint.matrixTransform(ctm.inverse());
               const endX = worldPoint.x;
               const endY = worldPoint.y;
@@ -526,14 +522,12 @@ export function useSolmu({
     const svg = (event.target as Element).closest('svg');
     if (!svg) return;
 
-    const rect = svg.getBoundingClientRect();
-    const svgPoint = svg.createSVGPoint();
-    svgPoint.x = event.clientX - rect.left;
-    svgPoint.y = event.clientY - rect.top;
-
     const ctm = svg.getScreenCTM();
     if (!ctm) return;
 
+    const svgPoint = svg.createSVGPoint();
+    svgPoint.x = event.clientX;
+    svgPoint.y = event.clientY;
     const worldPoint = svgPoint.matrixTransform(ctm.inverse());
     const snapped = viewport.snapToGrid({ x: worldPoint.x, y: worldPoint.y });
 
