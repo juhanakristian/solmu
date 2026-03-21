@@ -558,24 +558,21 @@ export function useSolmu({
     handleEdgeClick(edgeId);
   }
 
-  // Ctrl+A / Cmd+A to select all
-  React.useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if ((e.target as HTMLElement)?.tagName === "INPUT" || (e.target as HTMLElement)?.tagName === "TEXTAREA") return;
-      if ((e.ctrlKey || e.metaKey) && e.key === "a") {
-        e.preventDefault();
-        const allNodeIds = new Set(data.nodes.map((n) => n.id));
-        const allEdgeIds = new Set(
-          data.edges.map((edge, index) => `${edge.source.node}-${edge.target.node}-${index}`)
-        );
-        setSelectedNodeIds(allNodeIds);
-        setSelectedEdgeIds(allEdgeIds);
-        notifySelectionChange(allNodeIds, allEdgeIds);
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+  // Select all — called by useSolmuKeyboard or externally
+  const selectAll = React.useCallback(() => {
+    const allNodeIds = new Set(data.nodes.map((n) => n.id));
+    const allEdgeIds = new Set(
+      data.edges.map((edge, index) => `${edge.source.node}-${edge.target.node}-${index}`)
+    );
+    setSelectedNodeIds(allNodeIds);
+    setSelectedEdgeIds(allEdgeIds);
+    notifySelectionChange(allNodeIds, allEdgeIds);
   }, [data.nodes, data.edges]);
+
+  // Deselect all — called by useSolmuKeyboard or externally
+  const deselectAll = React.useCallback(() => {
+    clearSelection();
+  }, []);
 
   return {
     canvas: {
@@ -664,6 +661,10 @@ export function useSolmu({
     selection: {
       nodeIds: Array.from(selectedNodeIds),
       edgeIds: Array.from(selectedEdgeIds),
+    },
+    actions: {
+      selectAll,
+      deselectAll,
     },
   };
 }

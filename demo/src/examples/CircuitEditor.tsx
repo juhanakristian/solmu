@@ -1,5 +1,5 @@
 import React from "react";
-import { useSolmu, SolmuCanvas } from "../../../src";
+import { useSolmu, useSolmuKeyboard, SolmuCanvas } from "../../../src";
 import type { Edge } from "../../../src/types";
 
 // --- Electronic Component Symbols ---
@@ -197,8 +197,6 @@ export default function App() {
   const [baseNodes, setBaseNodes] = React.useState<BaseNode[]>(BASE_NODES);
   const [rotations, setRotations] = React.useState<Record<string, number>>({});
   const [edges, setEdges] = React.useState<Edge[]>(INITIAL_EDGES);
-  const [selectedEdgeId, setSelectedEdgeId] = React.useState<string | null>(null);
-
   const baseNodesRef = React.useRef(baseNodes);
   baseNodesRef.current = baseNodes;
   const rotationsRef = React.useRef(rotations);
@@ -222,24 +220,17 @@ export default function App() {
     ]);
   }
 
-  function onEdgeClick(edgeId: string) {
-    setSelectedEdgeId(edgeId);
-  }
-
-  function deleteSelectedEdge() {
-    if (selectedEdgeId) {
-      setEdges((prev) => {
-        const indexToRemove = prev.findIndex((edge, index) =>
-          `${edge.source.node}-${edge.target.node}-${index}` === selectedEdgeId
-        );
-        if (indexToRemove === -1) return prev;
-
-        const newEdges = [...prev];
-        newEdges.splice(indexToRemove, 1);
-        return newEdges;
-      });
-      setSelectedEdgeId(null);
+  function deleteSelected() {
+    if (selection.nodeIds.length === 0 && selection.edgeIds.length === 0) return;
+    const nodeSet = new Set(selection.nodeIds);
+    const edgeSet = new Set(selection.edgeIds);
+    if (nodeSet.size > 0) {
+      setBaseNodes((prev) => prev.filter((n) => !nodeSet.has(n.id)));
     }
+    setEdges((prev) => prev.filter((edge, index) => {
+      const id = `${edge.source.node}-${edge.target.node}-${index}`;
+      return !edgeSet.has(id) && !nodeSet.has(edge.source.node) && !nodeSet.has(edge.target.node);
+    }));
   }
 
   function onNodeMove(nodeId: string, x: number, y: number) {
@@ -312,25 +303,21 @@ export default function App() {
     },
   };
 
-  const { canvas, elements } = useSolmu({
+  const { canvas, elements, selection, actions } = useSolmu({
     data,
     config,
     onNodeMove,
     onConnect,
-    onEdgeClick,
     onEdgePathChange,
   });
 
-  // Keyboard handler for edge deletion
-  React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        deleteSelectedEdge();
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedEdgeId]);
+  useSolmuKeyboard({
+    actions: {
+      deleteSelected,
+      selectAll: actions.selectAll,
+      deselect: actions.deselectAll,
+    },
+  });
 
   // Zoom and pan
   const handleWheel = (e: React.WheelEvent) => {
