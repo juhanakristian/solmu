@@ -94,6 +94,8 @@ function App() {
 | [Viewport](docs/viewport.md) | Coordinate systems, zoom/pan, grid, and units |
 | [Interactions](docs/interactions.md) | Drag, connect, select, and edge editing callbacks |
 | [Components](docs/components.md) | Built-in `SolmuCanvas`, renderers, and markers |
+| [Keyboard Shortcuts](docs/keyboard.md) | `useSolmuKeyboard` hook, built-in and custom bindings |
+| [Copy, Paste & Duplicate](docs/clipboard.md) | `duplicateSelection`, system clipboard, cross-tab support |
 | [API Reference](docs/api.md) | Complete type reference for all exports |
 
 ## Demos

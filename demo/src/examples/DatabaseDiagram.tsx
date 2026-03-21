@@ -1,5 +1,5 @@
 import React from "react";
-import { useSolmu, DefaultConnectorRenderer, DefaultEdgeRenderer, SolmuMarkerDefs } from "../../../src";
+import { useSolmu, useSolmuKeyboard, duplicateSelection, copyToSystemClipboard, pasteFromSystemClipboard, DefaultConnectorRenderer, DefaultEdgeRenderer, SolmuMarkerDefs } from "../../../src";
 import type { Edge } from "../../../src/types";
 
 // --- Database Table Renderer ---
@@ -99,7 +99,7 @@ function measureTable(info: TableInfo) {
 }
 
 function DatabaseTable({ node, ...props }: any) {
-  const info = TABLE_DATA[node.id];
+  const info: TableInfo | undefined = node.data;
   if (!info) {
     return <rect {...props} width={30} height={20} fill="#fff" stroke="#333" />;
   }
@@ -257,7 +257,7 @@ function DatabaseCanvas({
       {/* Nodes */}
       {elements.nodes.map((node: any) => {
         const NodeComponent = node.renderer;
-        const info = TABLE_DATA[node.id];
+        const info: TableInfo | undefined = node.data;
         const dim = info ? measureTable(info) : { width: 30, height: 20 };
         return (
           <g key={node.id} transform={node.transform}>
@@ -319,8 +319,8 @@ function DatabaseCanvas({
 
 // --- Main App ---
 
-function computeConnectors(id: string) {
-  const info = TABLE_DATA[id];
+function computeConnectors(id: string, info?: TableInfo) {
+  if (!info) info = TABLE_DATA[id];
   if (!info) return [];
   const { width, height } = measureTable(info);
   const halfW = width / 2;
@@ -351,13 +351,13 @@ export default function DatabaseDiagramApp() {
 
   const [data, setData] = React.useState({
     nodes: [
-      { id: "users", x: -60, y: -40, type: "db-table", connectors: computeConnectors("users") },
-      { id: "posts", x: 20, y: -40, type: "db-table", connectors: computeConnectors("posts") },
-      { id: "comments", x: 20, y: 30, type: "db-table", connectors: computeConnectors("comments") },
-      { id: "categories", x: -60, y: 30, type: "db-table", connectors: computeConnectors("categories") },
-      { id: "post_categories", x: -60, y: 90, type: "db-table", connectors: computeConnectors("post_categories") },
-      { id: "tags", x: 100, y: -40, type: "db-table", connectors: computeConnectors("tags") },
-      { id: "post_tags", x: 100, y: 30, type: "db-table", connectors: computeConnectors("post_tags") },
+      { id: "users", x: -60, y: -40, type: "db-table", connectors: computeConnectors("users"), data: TABLE_DATA["users"] },
+      { id: "posts", x: 20, y: -40, type: "db-table", connectors: computeConnectors("posts"), data: TABLE_DATA["posts"] },
+      { id: "comments", x: 20, y: 30, type: "db-table", connectors: computeConnectors("comments"), data: TABLE_DATA["comments"] },
+      { id: "categories", x: -60, y: 30, type: "db-table", connectors: computeConnectors("categories"), data: TABLE_DATA["categories"] },
+      { id: "post_categories", x: -60, y: 90, type: "db-table", connectors: computeConnectors("post_categories"), data: TABLE_DATA["post_categories"] },
+      { id: "tags", x: 100, y: -40, type: "db-table", connectors: computeConnectors("tags"), data: TABLE_DATA["tags"] },
+      { id: "post_tags", x: 100, y: 30, type: "db-table", connectors: computeConnectors("post_tags"), data: TABLE_DATA["post_tags"] },
     ],
     edges: [
       // users 1---* posts
@@ -472,7 +472,7 @@ export default function DatabaseDiagramApp() {
     },
   };
 
-  const { canvas, elements, selection } = useSolmu({
+  const { canvas, elements, selection, actions } = useSolmu({
     data,
     config,
     onNodeMove,
@@ -480,16 +480,78 @@ export default function DatabaseDiagramApp() {
     onEdgePathChange,
   });
 
-  // Keyboard handler for deletion
-  React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        deleteSelected();
+  // Recompute connectors for duplicated/pasted nodes so connector IDs
+  // use the new node ID and dimensions match the table data.
+  function fixupNodes(result: { nodes: any[]; edges: any[]; idMap: Record<string, string> }) {
+    const fixedNodes = result.nodes.map((node: any) => ({
+      ...node,
+      connectors: computeConnectors(node.id, node.data),
+    }));
+    // Remap edge connector references: replace old node ID prefix with new one
+    function remapConnector(connectorId: string, oldNodeId: string, newNodeId: string): string {
+      if (connectorId.startsWith(oldNodeId + "-")) {
+        return newNodeId + connectorId.slice(oldNodeId.length);
       }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selection]);
+      return connectorId;
+    }
+    // Build reverse map: newId → oldId
+    const reverseMap: Record<string, string> = {};
+    for (const [oldId, newId] of Object.entries(result.idMap)) {
+      reverseMap[newId] = oldId;
+    }
+    const fixedEdges = result.edges.map((edge: any) => ({
+      ...edge,
+      source: {
+        node: edge.source.node,
+        connector: remapConnector(edge.source.connector, reverseMap[edge.source.node] || "", edge.source.node),
+      },
+      target: {
+        node: edge.target.node,
+        connector: remapConnector(edge.target.connector, reverseMap[edge.target.node] || "", edge.target.node),
+      },
+    }));
+    return { nodes: fixedNodes, edges: fixedEdges };
+  }
+
+  function handleDuplicate() {
+    if (selection.nodeIds.length === 0) return;
+    const result = duplicateSelection(data.nodes, data.edges, selection);
+    const fixed = fixupNodes(result);
+    setData((prev) => ({
+      ...prev,
+      nodes: [...prev.nodes, ...fixed.nodes] as typeof prev.nodes,
+      edges: [...prev.edges, ...fixed.edges],
+    }));
+  }
+
+  async function handleCopy() {
+    if (selection.nodeIds.length === 0) return;
+    await copyToSystemClipboard(data.nodes, data.edges, selection);
+  }
+
+  async function handlePaste() {
+    const result = await pasteFromSystemClipboard();
+    if (!result) return;
+    const fixed = fixupNodes(result);
+    setData((prev) => ({
+      ...prev,
+      nodes: [...prev.nodes, ...fixed.nodes] as typeof prev.nodes,
+      edges: [...prev.edges, ...fixed.edges],
+    }));
+  }
+
+  useSolmuKeyboard({
+    bindings: [
+      { key: "d", mod: true, action: handleDuplicate },
+      { key: "c", mod: true, action: handleCopy },
+      { key: "v", mod: true, action: handlePaste },
+    ],
+    actions: {
+      deleteSelected,
+      selectAll: actions.selectAll,
+      deselect: actions.deselectAll,
+    },
+  });
 
   // Zoom and pan
   const handleWheel = (e: React.WheelEvent) => {
@@ -609,6 +671,7 @@ export default function DatabaseDiagramApp() {
         <div style={{ fontSize: 11, color: '#a0aec0' }}>Click to select, Shift+click multi-select</div>
         <div style={{ fontSize: 11, color: '#a0aec0' }}>Drag empty area: marquee select</div>
         <div style={{ fontSize: 11, color: '#a0aec0' }}>Ctrl+A: select all, Delete: remove</div>
+        <div style={{ fontSize: 11, color: '#a0aec0' }}>Ctrl+D: duplicate, Ctrl+C/V: copy/paste</div>
         <div style={{ marginTop: 8, fontSize: 10, color: '#718096' }}>
           <span style={{ color: '#d69e2e' }}>🔑</span> Primary Key · <span style={{ color: '#3182ce' }}>🔗</span> Foreign Key
         </div>
