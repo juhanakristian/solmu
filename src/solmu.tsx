@@ -201,8 +201,8 @@ export function useSolmu({
       }
     }
 
-    // Marquee selection drag
-    if (marquee) {
+    // Marquee selection drag (only when not dragging a node, connector, or segment)
+    if (marquee && !dragItem && !dragConnector && !dragSegment) {
       const worldPoint = eventToWorld(event);
       if (worldPoint) {
         const dx = worldPoint.x - marquee.startWorld.x;
@@ -315,8 +315,8 @@ export function useSolmu({
   }
 
   function onConnectorMouseDown(connector: string, node: string) {
-    console.log(connector);
     setDragConnector({ id: connector, node });
+    setMarquee(null); // prevent marquee from starting
   }
 
   function onConnectorMouseUp(connector: string, node: string) {
@@ -578,7 +578,8 @@ export function useSolmu({
     canvas: {
       props: {
         onMouseDown: (event: React.MouseEvent) => {
-          // Start marquee selection (deselect happens on mouseup if no drag)
+          // Only start marquee on primary button, no modifiers used for panning
+          if (event.button !== 0 || event.ctrlKey || event.metaKey) return;
           const worldPoint = eventToWorld(event);
           if (worldPoint) {
             setMarquee({ startWorld: worldPoint, currentWorld: worldPoint, active: false });
@@ -650,6 +651,7 @@ export function useSolmu({
     },
     interactions: {
       onMouseDown: (event: React.MouseEvent) => {
+        if (event.button !== 0 || event.ctrlKey || event.metaKey) return;
         const worldPoint = eventToWorld(event);
         if (worldPoint) {
           setMarquee({ startWorld: worldPoint, currentWorld: worldPoint, active: false });
