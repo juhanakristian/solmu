@@ -1,5 +1,5 @@
 import React from "react";
-import { useSolmu, useSolmuKeyboard, duplicateSelection, copyToSystemClipboard, pasteFromSystemClipboard, DefaultConnectorRenderer, DefaultEdgeRenderer, SolmuMarkerDefs } from "../../../src";
+import { useSolmu, useSolmuKeyboard, duplicateSelection, copyToSystemClipboard, pasteFromSystemClipboard, DefaultEdgeRenderer, SolmuMarkerDefs } from "../../../src";
 
 import type { Edge } from "../../../src/types";
 
@@ -280,7 +280,7 @@ function DatabaseCanvas({
               <NodeComponent {...node.nodeProps} />
             </g>
             {node.connectorProps.map((cp: any) => (
-              <DefaultConnectorRenderer key={cp.connector.id} {...cp} />
+              <DbConnectorRenderer key={cp.connector.id} {...cp} />
             ))}
           </g>
         );
@@ -320,18 +320,40 @@ function DatabaseCanvas({
 
 // --- Main App ---
 
+/** Y position of a column row relative to the node origin (center). */
+function rowY(info: TableInfo, rowIndex: number): number {
+  const { height } = measureTable(info);
+  const halfH = height / 2;
+  return -halfH + HEADER_HEIGHT + PADDING_Y + (rowIndex + 0.5) * LINE_HEIGHT;
+}
+
 function computeConnectors(id: string, info?: TableInfo) {
   if (!info) info = TABLE_DATA[id];
   if (!info) return [];
-  const { width, height } = measureTable(info);
+  const { width } = measureTable(info);
   const halfW = width / 2;
-  const halfH = height / 2;
-  return [
-    { id: `${id}-top`, x: 0, y: -halfH },
-    { id: `${id}-bottom`, x: 0, y: halfH },
-    { id: `${id}-left`, x: -halfW, y: 0 },
-    { id: `${id}-right`, x: halfW, y: 0 },
-  ];
+  return info.columns.flatMap((col, i) => [
+    { id: `${id}-${col.name}-left`, x: -halfW, y: rowY(info!, i) },
+    { id: `${id}-${col.name}-right`, x: halfW, y: rowY(info!, i) },
+  ]);
+}
+
+function DbConnectorRenderer({ connector, isHovered, onMouseDown, onMouseOver, onMouseUp, onMouseOut }: any) {
+  const r = isHovered ? 1.2 : 0.7;
+  return (
+    <circle
+      cx={connector.x}
+      cy={connector.y}
+      r={r}
+      fill={isHovered ? "#3182ce" : "#a0aec0"}
+      opacity={isHovered ? 1 : 0.5}
+      onMouseDown={onMouseDown}
+      onMouseOver={onMouseOver}
+      onMouseUp={onMouseUp}
+      onMouseOut={onMouseOut}
+      style={{ cursor: "crosshair" }}
+    />
+  );
 }
 
 export default function DatabaseDiagramApp() {
@@ -361,50 +383,52 @@ export default function DatabaseDiagramApp() {
       { id: "post_tags", x: 100, y: 30, type: "db-table", connectors: computeConnectors("post_tags"), data: TABLE_DATA["post_tags"] },
     ],
     edges: [
-      // users 1---* posts
+      // users.id 1---* posts.user_id
       {
-        source: { node: "users", connector: "users-right" },
-        target: { node: "posts", connector: "posts-left" },
+        source: { node: "users", connector: "users-id-right" },
+        target: { node: "posts", connector: "posts-user_id-left" },
         type: "orthogonal",
         style: { stroke: "#4a5568", strokeWidth: 0.3, markerEnd: "arrow-open" },
       } as Edge,
-      // posts 1---* comments
+      // posts.id 1---* comments.post_id
       {
-        source: { node: "posts", connector: "posts-bottom" },
-        target: { node: "comments", connector: "comments-top" },
+        source: { node: "posts", connector: "posts-id-right" },
+        target: { node: "comments", connector: "comments-post_id-left" },
         type: "orthogonal",
         style: { stroke: "#4a5568", strokeWidth: 0.3, markerEnd: "arrow-open" },
       } as Edge,
-      // users 1---* comments
+      // users.id 1---* comments.user_id
       {
-        source: { node: "users", connector: "users-bottom" },
-        target: { node: "comments", connector: "comments-left" },
+        source: { node: "users", connector: "users-id-right" },
+        target: { node: "comments", connector: "comments-user_id-left" },
         type: "orthogonal",
         style: { stroke: "#4a5568", strokeWidth: 0.3, markerEnd: "arrow-open" },
       } as Edge,
-      // posts *---* categories (via post_categories)
+      // posts.id 1---* post_categories.post_id
       {
-        source: { node: "posts", connector: "posts-right" },
-        target: { node: "post_categories", connector: "post_categories-top" },
+        source: { node: "posts", connector: "posts-id-right" },
+        target: { node: "post_categories", connector: "post_categories-post_id-left" },
         type: "orthogonal",
         style: { stroke: "#4a5568", strokeWidth: 0.3, markerEnd: "arrow-open" },
       } as Edge,
+      // categories.id 1---* post_categories.category_id
       {
-        source: { node: "categories", connector: "categories-bottom" },
-        target: { node: "post_categories", connector: "post_categories-left" },
+        source: { node: "categories", connector: "categories-id-right" },
+        target: { node: "post_categories", connector: "post_categories-category_id-left" },
         type: "orthogonal",
         style: { stroke: "#4a5568", strokeWidth: 0.3, markerEnd: "arrow-open" },
       } as Edge,
-      // posts *---* tags (via post_tags)
+      // posts.id 1---* post_tags.post_id
       {
-        source: { node: "posts", connector: "posts-right" },
-        target: { node: "post_tags", connector: "post_tags-top" },
+        source: { node: "posts", connector: "posts-id-right" },
+        target: { node: "post_tags", connector: "post_tags-post_id-left" },
         type: "orthogonal",
         style: { stroke: "#4a5568", strokeWidth: 0.3, markerEnd: "arrow-open" },
       } as Edge,
+      // tags.id 1---* post_tags.tag_id
       {
-        source: { node: "tags", connector: "tags-bottom" },
-        target: { node: "post_tags", connector: "post_tags-right" },
+        source: { node: "tags", connector: "tags-id-right" },
+        target: { node: "post_tags", connector: "post_tags-tag_id-left" },
         type: "orthogonal",
         style: { stroke: "#4a5568", strokeWidth: 0.3, markerEnd: "arrow-open" },
       } as Edge,
