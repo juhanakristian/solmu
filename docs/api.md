@@ -418,10 +418,6 @@ type ViewportConfig = {
 
 ---
 
-## Component props
-
----
-
 ## Keyboard
 
 ### `useSolmuKeyboard(params)`
@@ -461,6 +457,38 @@ type KeyBinding = {
   action: () => void;
   passthrough?: boolean;
 };
+```
+
+---
+
+## Clipboard
+
+### `duplicateSelection(nodes, edges, selection, options?): PasteResult`
+
+Duplicate selected nodes and their internal edges. See [Copy, Paste & Duplicate](clipboard.md).
+
+### `copySelection(nodes, edges, selection): ClipboardData`
+
+Extract selected nodes and edges into a serializable object.
+
+### `pasteClipboard(clipboard, options?): PasteResult`
+
+Create new nodes/edges from clipboard data with new IDs and offset positions.
+
+### `copyToSystemClipboard(nodes, edges, selection): Promise<void>`
+
+Copy selection to system clipboard as JSON.
+
+### `pasteFromSystemClipboard(options?): Promise<PasteResult | null>`
+
+Read and parse graph data from system clipboard.
+
+### Types
+
+```ts
+type ClipboardData = { nodes: SolmuNode<any>[]; edges: Edge[] };
+type PasteResult = { nodes: SolmuNode<any>[]; edges: Edge[]; idMap: Record<string, string> };
+type DuplicateOptions = { offset?: { x: number; y: number }; generateId?: (id: string) => string };
 ```
 
 ---
