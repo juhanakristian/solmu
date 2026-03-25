@@ -30,30 +30,30 @@ export function SolmuMarkerDefs({ edges }: { edges: SolmuRenderEdge[] }) {
       {needArrow && (
         <marker
           id={BUILTIN_MARKER_IDS["arrow"]}
-          markerWidth="10"
+          markerWidth="6"
           markerHeight="7"
-          refX="9"
+          refX="5"
           refY="3.5"
           orient="auto"
           markerUnits="strokeWidth"
         >
-          <path d="M 0 0 L 10 3.5 L 0 7 Z" fill="context-stroke" stroke="none" />
+          <path d="M 0 0 L 6 3.5 L 0 7 Z" fill="context-stroke" stroke="none" />
         </marker>
       )}
       {needArrowOpen && (
         <marker
           id={BUILTIN_MARKER_IDS["arrow-open"]}
           markerWidth="10"
-          markerHeight="7"
-          refX="9"
-          refY="3.5"
+          markerHeight="8"
+          refX="6"
+          refY="4"
           orient="auto"
           markerUnits="strokeWidth"
         >
           <polyline
-            points="0,0 9,3.5 0,7"
+            points="0,0 6,4 0,8"
             stroke="context-stroke"
-            strokeWidth="1.5"
+            strokeWidth="1.2"
             fill="none"
             strokeLinejoin="round"
             strokeLinecap="round"

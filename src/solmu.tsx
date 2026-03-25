@@ -71,6 +71,8 @@ export function useSolmu({
     });
   }, [config.viewport]);
   const [dragItem, setDragItem] = React.useState<string | null>(null);
+  // Offset from mouse to node origin at drag start, so the node doesn't jump
+  const [dragOffset, setDragOffset] = React.useState<Point>({ x: 0, y: 0 });
 
   // Multi-selection state
   const [selectedNodeIds, setSelectedNodeIds] = React.useState<Set<string>>(new Set());
@@ -109,6 +111,12 @@ export function useSolmu({
   } | null>(null);
 
   function onMouseDown(event: React.MouseEvent, id: string) {
+    // Compute offset from mouse to node origin so the node doesn't jump
+    const node = data.nodes.find((n) => n.id === id);
+    const worldPoint = eventToWorld(event);
+    if (node && worldPoint) {
+      setDragOffset({ x: node.x - worldPoint.x, y: node.y - worldPoint.y });
+    }
     setDragItem(id);
     handleNodeClick(id, event.shiftKey);
   }
@@ -134,15 +142,6 @@ export function useSolmu({
       }
       setMarquee(null);
     }
-    if (dragConnector) {
-      if (hoverConnector && onConnect) {
-        onConnect(
-          { node: dragConnector.node, connector: dragConnector.id },
-          { node: hoverConnector.node, connector: hoverConnector.id }
-        );
-      }
-      setDragConnector(null);
-    }
   }
 
   // Convert a mouse event to world coordinates via SVG CTM.
@@ -167,7 +166,9 @@ export function useSolmu({
 
       const worldPoint = eventToWorld(event);
       if (worldPoint) {
-        const snapped = viewport.snapToGrid(worldPoint);
+        // Apply drag offset so the node doesn't jump to the cursor
+        const target = { x: worldPoint.x + dragOffset.x, y: worldPoint.y + dragOffset.y };
+        const snapped = viewport.snapToGrid(target);
         const deltaX = snapped.x - node.x;
         const deltaY = snapped.y - node.y;
 

@@ -5,6 +5,10 @@ export { useSolmu, SolmuCanvas, DefaultConnectorRenderer, DefaultEdgeRenderer, S
 export * from "./types";
 export * from "./viewport";
 
+// Viewport utilities
+export { useSolmuViewport } from "./useViewport";
+export type { ViewportState, UseSolmuViewportOptions } from "./useViewport";
+
 // Keyboard utilities
 export { useSolmuKeyboard } from "./keyboard";
 export type { KeyBinding, UseSolmuKeyboardParams } from "./keyboard";

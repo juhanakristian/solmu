@@ -1,5 +1,5 @@
 import React from "react";
-import { useSolmu, useSolmuKeyboard, DefaultConnectorRenderer } from "../../../src";
+import { useSolmu, useSolmuKeyboard, useSolmuViewport, DefaultConnectorRenderer } from "../../../src";
 import type { Edge } from "../../../src/types";
 
 // --- Flowchart shape renderers ---
@@ -287,11 +287,9 @@ function FlowChartCanvas({
 // --- Main App ---
 
 export default function FlowChartApp() {
-  const [viewportConfig, setViewportConfig] = React.useState({
+  const { viewportConfig, containerProps, isPanning } = useSolmuViewport({
     origin: 'top-left' as const,
     units: 'mm' as const,
-    width: window.innerWidth,
-    height: window.innerHeight,
     worldBounds: { x: -200, y: -200, width: 400, height: 400 },
     zoom: 1,
     pan: { x: 0, y: 0 },
@@ -433,71 +431,7 @@ export default function FlowChartApp() {
     },
   });
 
-  // Zoom & pan
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    setViewportConfig((prev) => ({
-      ...prev,
-      zoom: Math.max(0.1, Math.min(10, prev.zoom * zoomFactor)),
-    }));
-  };
-
-  const [isPanning, setIsPanning] = React.useState(false);
-  const [lastPanPos, setLastPanPos] = React.useState({ x: 0, y: 0 });
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 1 || (e.button === 0 && e.ctrlKey)) {
-      e.preventDefault();
-      setIsPanning(true);
-      setLastPanPos({ x: e.clientX, y: e.clientY });
-    }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (isPanning) {
-      e.preventDefault();
-      const deltaX = e.clientX - lastPanPos.x;
-      const deltaY = e.clientY - lastPanPos.y;
-      const normalizedDeltaX = deltaX / viewportConfig.width / viewportConfig.zoom;
-      const normalizedDeltaY = deltaY / viewportConfig.height / viewportConfig.zoom;
-      setViewportConfig((prev) => ({
-        ...prev,
-        pan: {
-          x: prev.pan.x - normalizedDeltaX,
-          y: prev.pan.y - normalizedDeltaY,
-        },
-      }));
-      setLastPanPos({ x: e.clientX, y: e.clientY });
-    }
-  };
-
-  const handleMouseUp = () => setIsPanning(false);
-
-  React.useEffect(() => {
-    const handler = () => setIsPanning(false);
-    if (isPanning) {
-      document.addEventListener('mouseup', handler);
-      document.addEventListener('mouseleave', handler);
-      return () => {
-        document.removeEventListener('mouseup', handler);
-        document.removeEventListener('mouseleave', handler);
-      };
-    }
-  }, [isPanning]);
-
-  React.useEffect(() => {
-    const handler = () => {
-      setViewportConfig((prev) => ({
-        ...prev,
-        width: window.innerWidth,
-        height: window.innerHeight,
-      }));
-    };
-    window.addEventListener('resize', handler);
-    return () => window.removeEventListener('resize', handler);
-  }, []);
+  // Zoom & pan handled by useSolmuViewport (containerProps)
 
 
 
@@ -524,7 +458,8 @@ export default function FlowChartApp() {
         <div style={{ color: '#1565c0', fontWeight: 600, marginBottom: 4, fontSize: 13 }}>Flow Chart</div>
         <div style={{ fontSize: 11, color: '#888' }}>Zoom: {viewportConfig.zoom.toFixed(1)}x</div>
         <hr style={{ margin: '8px 0', borderColor: '#e0e0e0', borderStyle: 'solid' }} />
-        <div style={{ fontSize: 11, color: '#999' }}>Scroll: Zoom</div>
+        <div style={{ fontSize: 11, color: '#999' }}>Scroll/Two-finger: Pan</div>
+        <div style={{ fontSize: 11, color: '#999' }}>Pinch/Ctrl+Scroll: Zoom</div>
         <div style={{ fontSize: 11, color: '#999' }}>Middle/Ctrl+Drag: Pan</div>
         <div style={{ fontSize: 11, color: '#999' }}>Drag shapes to move</div>
         <div style={{ fontSize: 11, color: '#999' }}>Drag between connectors to link</div>
@@ -535,10 +470,7 @@ export default function FlowChartApp() {
       {/* Canvas */}
       <div
         style={{ width: "100%", height: "100%", overflow: "hidden" }}
-        onWheel={handleWheel}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
+        {...containerProps}
       >
         <FlowChartCanvas
           canvas={canvas}

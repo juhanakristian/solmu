@@ -1,5 +1,5 @@
 import React from "react";
-import { useSolmu, useSolmuKeyboard, SolmuCanvas } from "../../../src";
+import { useSolmu, useSolmuKeyboard, useSolmuViewport, SolmuCanvas } from "../../../src";
 import type { Edge } from "../../../src/types";
 
 // --- Electronic Component Symbols ---
@@ -179,11 +179,9 @@ export default function App() {
   // SVG-space mouse position (Y down) for hit-testing against node positions
   const svgMousePos = React.useRef({ x: 0, y: 0 });
 
-  const [viewportConfig, setViewportConfig] = React.useState({
+  const { viewportConfig, containerProps, isPanning } = useSolmuViewport({
     origin: 'bottom-left' as const,
     units: 'mm' as const,
-    width: window.innerWidth,
-    height: window.innerHeight,
     worldBounds: { x: -200, y: -200, width: 400, height: 400 },
     zoom: 1,
     pan: { x: 0, y: 0 },
@@ -319,29 +317,10 @@ export default function App() {
     },
   });
 
-  // Zoom and pan
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    setViewportConfig(prev => ({
-      ...prev,
-      zoom: Math.max(0.1, Math.min(10, prev.zoom * zoomFactor))
-    }));
-  };
+  // Zoom & pan handled by useSolmuViewport (containerProps)
 
-  const [isPanning, setIsPanning] = React.useState(false);
-  const [lastPanPos, setLastPanPos] = React.useState({ x: 0, y: 0 });
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 1 || (e.button === 0 && e.ctrlKey)) {
-      e.preventDefault();
-      setIsPanning(true);
-      setLastPanPos({ x: e.clientX, y: e.clientY });
-    }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
+  // Track cursor position in world coordinates for display and hit-testing
+  const handleContainerMouseMove = (e: React.MouseEvent) => {
     if (canvas.viewport) {
       const svg = e.currentTarget.querySelector('svg');
       if (svg) {
@@ -363,58 +342,7 @@ export default function App() {
         }
       }
     }
-
-    if (isPanning) {
-      e.preventDefault();
-      const deltaX = e.clientX - lastPanPos.x;
-      const deltaY = e.clientY - lastPanPos.y;
-
-      const normalizedDeltaX = deltaX / viewportConfig.width / viewportConfig.zoom;
-      const normalizedDeltaY = deltaY / viewportConfig.height / viewportConfig.zoom;
-
-      setViewportConfig(prev => ({
-        ...prev,
-        pan: {
-          x: prev.pan.x - normalizedDeltaX,
-          y: prev.pan.y - normalizedDeltaY,
-        }
-      }));
-
-      setLastPanPos({ x: e.clientX, y: e.clientY });
-    }
   };
-
-  const handleMouseUp = () => {
-    setIsPanning(false);
-  };
-
-  React.useEffect(() => {
-    const handleGlobalMouseUp = () => {
-      setIsPanning(false);
-    };
-
-    if (isPanning) {
-      document.addEventListener('mouseup', handleGlobalMouseUp);
-      document.addEventListener('mouseleave', handleGlobalMouseUp);
-      return () => {
-        document.removeEventListener('mouseup', handleGlobalMouseUp);
-        document.removeEventListener('mouseleave', handleGlobalMouseUp);
-      };
-    }
-  }, [isPanning]);
-
-  React.useEffect(() => {
-    const handleResize = () => {
-      setViewportConfig(prev => ({
-        ...prev,
-        width: window.innerWidth,
-        height: window.innerHeight,
-      }));
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   // Label positions
   const labels = data.nodes.map((n) => {
@@ -450,7 +378,8 @@ export default function App() {
         <div>Zoom: {viewportConfig.zoom.toFixed(1)}x</div>
         <div>Cursor: {canvas.viewport?.formatCoordinate(mousePos.x)}, {canvas.viewport?.formatCoordinate(mousePos.y)}</div>
         <hr style={{ margin: '8px 0', borderColor: '#2a3a5c', borderStyle: 'solid' }} />
-        <div style={{ fontSize: 11, color: '#5a6785' }}>Scroll: Zoom</div>
+        <div style={{ fontSize: 11, color: '#5a6785' }}>Scroll/Two-finger: Pan</div>
+        <div style={{ fontSize: 11, color: '#5a6785' }}>Pinch/Ctrl+Scroll: Zoom</div>
         <div style={{ fontSize: 11, color: '#5a6785' }}>Middle/Ctrl+Drag: Pan</div>
         <div style={{ fontSize: 11, color: '#5a6785' }}>Drag components to move</div>
         <div style={{ fontSize: 11, color: '#5a6785' }}>Drag between pins to connect</div>
@@ -465,10 +394,11 @@ export default function App() {
           height: "100%",
           overflow: "hidden",
         }}
-        onWheel={handleWheel}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
+        {...containerProps}
+        onMouseMove={(e) => {
+          containerProps.onMouseMove(e);
+          handleContainerMouseMove(e);
+        }}
       >
         <SolmuCanvas
           canvas={canvas}
