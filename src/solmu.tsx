@@ -112,7 +112,7 @@ export function useSolmu({
 
   function onMouseDown(event: React.MouseEvent, id: string) {
     // Compute offset from mouse to node origin so the node doesn't jump
-    const node = data.nodes.find((n) => n.id === id);
+    const node = nodeMap.get(id);
     const worldPoint = eventToWorld(event);
     if (node && worldPoint) {
       setDragOffset({ x: node.x - worldPoint.x, y: node.y - worldPoint.y });
@@ -161,7 +161,7 @@ export function useSolmu({
 
   function onMouseMove(event: React.MouseEvent) {
     if (dragItem && onNodeMove) {
-      const node = data.nodes.find((n) => n.id === dragItem);
+      const node = nodeMap.get(dragItem);
       if (!node) return;
 
       const worldPoint = eventToWorld(event);
@@ -179,7 +179,7 @@ export function useSolmu({
         if (selectedNodeIds.has(dragItem) && selectedNodeIds.size > 1) {
           for (const selectedId of selectedNodeIds) {
             if (selectedId === dragItem) continue;
-            const selectedNode = data.nodes.find((n) => n.id === selectedId);
+            const selectedNode = nodeMap.get(selectedId);
             if (selectedNode) {
               onNodeMove(selectedId, selectedNode.x + deltaX, selectedNode.y + deltaY);
             }
@@ -265,7 +265,7 @@ export function useSolmu({
     }
 
     if (dragConnector) {
-      const sourceNode = data.nodes.find((n) => n.id === dragConnector.node);
+      const sourceNode = nodeMap.get(dragConnector.node);
       if (sourceNode) {
         const sourceConnector = sourceNode.connectors?.find(
           (c) => c.id === dragConnector.id
