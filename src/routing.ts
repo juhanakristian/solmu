@@ -105,18 +105,26 @@ function pointInRect(point: Point, rect: Rectangle, margin: number = 0): boolean
  */
 class SpatialGrid {
   private cellSize: number;
-  private cells = new Map<string, number[]>();
+  private invCellSize: number;
+  private cells = new Map<number, number[]>();
   private obstacles: NodeBounds[];
   private margin: number;
+
+  // Hash grid coordinates to a single number.
+  // Offset to handle negative coords, then combine with a large prime stride.
+  private static hashCell(gx: number, gy: number): number {
+    return ((gx + 100000) * 200003) + (gy + 100000);
+  }
 
   constructor(obstacles: NodeBounds[], margin: number, cellSize: number) {
     this.obstacles = obstacles;
     this.margin = margin;
     this.cellSize = cellSize;
+    this.invCellSize = 1 / cellSize;
     this._checkedAt = new Int32Array(obstacles.length);
 
     // Index all obstacles into grid cells
-    const invCell = 1 / cellSize;
+    const invCell = this.invCellSize;
     for (let i = 0; i < obstacles.length; i++) {
       const b = obstacles[i].bounds;
       const x0 = Math.floor((b.x - margin) * invCell);
@@ -125,7 +133,7 @@ class SpatialGrid {
       const y1 = Math.floor((b.y + b.height + margin) * invCell);
       for (let gx = x0; gx <= x1; gx++) {
         for (let gy = y0; gy <= y1; gy++) {
-          const key = `${gx},${gy}`;
+          const key = SpatialGrid.hashCell(gx, gy);
           let cell = this.cells.get(key);
           if (!cell) {
             cell = [];
@@ -139,7 +147,7 @@ class SpatialGrid {
 
   /** Check if a point is blocked by any obstacle */
   isPointBlocked(x: number, y: number): boolean {
-    const key = `${Math.floor(x / this.cellSize)},${Math.floor(y / this.cellSize)}`;
+    const key = SpatialGrid.hashCell(Math.floor(x * this.invCellSize), Math.floor(y * this.invCellSize));
     const cell = this.cells.get(key);
     if (!cell) return false;
     const m = this.margin;
@@ -159,13 +167,12 @@ class SpatialGrid {
 
   /** Check if a line segment is blocked by any obstacle */
   isSegmentBlocked(p1x: number, p1y: number, p2x: number, p2y: number): boolean {
-    const invCell = 1 / this.cellSize;
+    const invCell = this.invCellSize;
     const x0 = Math.floor(Math.min(p1x, p2x) * invCell);
     const y0 = Math.floor(Math.min(p1y, p2y) * invCell);
     const x1 = Math.floor(Math.max(p1x, p2x) * invCell);
     const y1 = Math.floor(Math.max(p1y, p2y) * invCell);
 
-    // Use generation counter instead of Set for deduplication
     this._checkGen++;
     const gen = this._checkGen;
     const checkedAt = this._checkedAt;
@@ -175,7 +182,7 @@ class SpatialGrid {
 
     for (let gx = x0; gx <= x1; gx++) {
       for (let gy = y0; gy <= y1; gy++) {
-        const cell = this.cells.get(`${gx},${gy}`);
+        const cell = this.cells.get(SpatialGrid.hashCell(gx, gy));
         if (!cell) continue;
         for (let i = 0; i < cell.length; i++) {
           const idx = cell[i];
