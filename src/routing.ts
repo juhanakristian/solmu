@@ -207,33 +207,28 @@ function lineIntersectsRect(
   rect: Rectangle,
   margin: number = 0
 ): boolean {
-  const expandedRect = {
-    x: rect.x - margin,
-    y: rect.y - margin,
-    width: rect.width + margin * 2,
-    height: rect.height + margin * 2,
-  };
+  // Compute expanded rect bounds inline (avoid object allocation)
+  const rx = rect.x - margin;
+  const ry = rect.y - margin;
+  const rx2 = rx + rect.width + margin * 2;
+  const ry2 = ry + rect.height + margin * 2;
 
   // Check if either endpoint is inside the rectangle
-  if (pointInRect(p1, expandedRect, 0) || pointInRect(p2, expandedRect, 0)) {
+  if ((p1.x >= rx && p1.x <= rx2 && p1.y >= ry && p1.y <= ry2) ||
+      (p2.x >= rx && p2.x <= rx2 && p2.y >= ry && p2.y <= ry2)) {
     return true;
   }
 
-  // Check line segment against each edge of the rectangle
-  const corners = [
-    { x: expandedRect.x, y: expandedRect.y },
-    { x: expandedRect.x + expandedRect.width, y: expandedRect.y },
-    { x: expandedRect.x + expandedRect.width, y: expandedRect.y + expandedRect.height },
-    { x: expandedRect.x, y: expandedRect.y + expandedRect.height },
-  ];
+  // Check line segment against each edge of the rectangle (unrolled, reuse Points)
+  const tl: Point = { x: rx, y: ry };
+  const tr: Point = { x: rx2, y: ry };
+  const br: Point = { x: rx2, y: ry2 };
+  const bl: Point = { x: rx, y: ry2 };
 
-  for (let i = 0; i < 4; i++) {
-    const c1 = corners[i];
-    const c2 = corners[(i + 1) % 4];
-    if (lineSegmentsIntersect(p1, p2, c1, c2)) {
-      return true;
-    }
-  }
+  if (lineSegmentsIntersect(p1, p2, tl, tr)) return true;
+  if (lineSegmentsIntersect(p1, p2, tr, br)) return true;
+  if (lineSegmentsIntersect(p1, p2, br, bl)) return true;
+  if (lineSegmentsIntersect(p1, p2, bl, tl)) return true;
 
   return false;
 }
