@@ -52,31 +52,39 @@ export function getNodeBounds(
   const defW = defaultDimensions?.width ?? DEFAULT_NODE_WIDTH;
   const defH = defaultDimensions?.height ?? DEFAULT_NODE_HEIGHT;
 
-  return nodes
-    .filter(node => !excluded.has(node.id))
-    .map(node => {
-      // Infer dimensions from connector spread, falling back to defaults
-      let width = defW;
-      let height = defH;
-      if (node.connectors && node.connectors.length > 1) {
-        const xs = node.connectors.map(c => c.x);
-        const ys = node.connectors.map(c => c.y);
-        const spanX = Math.max(...xs) - Math.min(...xs);
-        const spanY = Math.max(...ys) - Math.min(...ys);
-        width = Math.max(defW, spanX + 4);
-        height = Math.max(defH, spanY + 4);
-      }
+  const result: NodeBounds[] = [];
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
+    if (excluded.size > 0 && excluded.has(node.id)) continue;
 
-      return {
-        id: node.id,
-        bounds: {
-          x: node.x - width / 2,
-          y: node.y - height / 2,
-          width,
-          height,
-        },
-      };
+    let width = defW;
+    let height = defH;
+    const conns = node.connectors;
+    if (conns && conns.length > 1) {
+      let minX = conns[0].x, maxX = conns[0].x;
+      let minY = conns[0].y, maxY = conns[0].y;
+      for (let j = 1; j < conns.length; j++) {
+        const cx = conns[j].x, cy = conns[j].y;
+        if (cx < minX) minX = cx; else if (cx > maxX) maxX = cx;
+        if (cy < minY) minY = cy; else if (cy > maxY) maxY = cy;
+      }
+      const spanX = maxX - minX;
+      const spanY = maxY - minY;
+      if (spanX + 4 > defW) width = spanX + 4;
+      if (spanY + 4 > defH) height = spanY + 4;
+    }
+
+    result.push({
+      id: node.id,
+      bounds: {
+        x: node.x - width / 2,
+        y: node.y - height / 2,
+        width,
+        height,
+      },
     });
+  }
+  return result;
 }
 
 /**
@@ -621,22 +629,21 @@ function pathToOrthogonalSVG(path: Point[]): string {
   if (path.length === 0) return '';
   if (path.length === 1) return `M${path[0].x},${path[0].y}`;
 
-  let d = `M${path[0].x},${path[0].y}`;
+  // Pre-allocate array to avoid string concatenation overhead
+  const parts: string[] = [`M${path[0].x},${path[0].y}`];
 
   for (let i = 1; i < path.length; i++) {
     const prev = path[i - 1];
     const curr = path[i];
 
-    // If the segment is already axis-aligned, draw directly
     if (prev.x === curr.x || prev.y === curr.y) {
-      d += ` L${curr.x},${curr.y}`;
+      parts.push(`L${curr.x},${curr.y}`);
     } else {
-      // Insert a mid-point to make it orthogonal (horizontal first, then vertical)
-      d += ` L${curr.x},${prev.y} L${curr.x},${curr.y}`;
+      parts.push(`L${curr.x},${prev.y}`, `L${curr.x},${curr.y}`);
     }
   }
 
-  return d;
+  return parts.join(' ');
 }
 
 /**

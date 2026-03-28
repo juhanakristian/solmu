@@ -518,7 +518,9 @@ export function useSolmu({
       );
     }
 
-    return calculateRoute(start, end, nodeBoundsCache, { ...routingConfig, mode }, sc, tc, spatialGridRef);
+    // Avoid object spread per edge — reuse config when mode matches
+    const edgeConfig = mode === routingConfig.mode ? routingConfig : { ...routingConfig, mode };
+    return calculateRoute(start, end, nodeBoundsCache, edgeConfig, sc, tc, spatialGridRef);
   };
 
   // Handle segment drag start — captures initial state for drag calculations
