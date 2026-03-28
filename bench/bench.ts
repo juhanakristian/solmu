@@ -9,7 +9,7 @@
  * 4. Full "render cycle" simulation (what useSolmu does per frame)
  */
 
-import { calculateRoute, getNodeBounds, buildPathFromWaypoints } from "../src/routing";
+import { calculateRoute, getNodeBounds, buildPathFromWaypoints, createSpatialGrid } from "../src/routing";
 import type { Point, NodeBounds, InternalRoutingConfig } from "../src/routing";
 import type { SolmuNode, Edge, Connector } from "../src/types";
 import { SolmuViewport } from "../src/viewport";
@@ -97,6 +97,8 @@ function benchEdgeRouting(nodes: SolmuNode<any>[], edges: Edge[], label: string)
   };
 
   const ms = benchmarkFn(() => {
+    // Build spatial grid once for all edges
+    const grid = createSpatialGrid(nodeBounds, routingConfig.margin);
     for (const edge of edges) {
       const source = nodeMap.get(edge.source.node)!;
       const target = nodeMap.get(edge.target.node)!;
@@ -106,8 +108,8 @@ function benchEdgeRouting(nodes: SolmuNode<any>[], edges: Edge[], label: string)
       const start: Point = { x: source.x + sc.x, y: source.y + sc.y };
       const end: Point = { x: target.x + tc.x, y: target.y + tc.y };
 
-      const obstacles = nodeBounds.filter(ob => ob.id !== source.id && ob.id !== target.id);
-      calculateRoute(start, end, obstacles, routingConfig, sc, tc);
+      // Pass full obstacle list + spatial grid (no per-edge filter needed)
+      calculateRoute(start, end, nodeBounds, routingConfig, sc, tc, grid);
     }
   });
 
@@ -157,7 +159,8 @@ function benchGridDots() {
 function benchFullCycle(nodes: SolmuNode<any>[], edges: Edge[], label: string) {
   // Simulates the full computation useSolmu does per render:
   // 1. getNodeBounds
-  // 2. For each edge: find nodes, find connectors, filter obstacles, calculate route, compute segments
+  // 2. Build spatial grid
+  // 3. For each edge: find nodes, find connectors, calculate route, compute segments
   const routingConfig: InternalRoutingConfig = {
     mode: "orthogonal",
     margin: 3,
@@ -168,6 +171,7 @@ function benchFullCycle(nodes: SolmuNode<any>[], edges: Edge[], label: string) {
 
   const ms = benchmarkFn(() => {
     const nodeBoundsCache = getNodeBounds(nodes, undefined, { width: 15, height: 5 });
+    const grid = createSpatialGrid(nodeBoundsCache, routingConfig.margin);
 
     for (const edge of edges) {
       const source = nodes.find(n => n.id === edge.source.node);
@@ -181,8 +185,7 @@ function benchFullCycle(nodes: SolmuNode<any>[], edges: Edge[], label: string) {
       const start: Point = { x: source.x + sc.x, y: source.y + sc.y };
       const end: Point = { x: target.x + tc.x, y: target.y + tc.y };
 
-      const obstacles = nodeBoundsCache.filter(ob => ob.id !== source.id && ob.id !== target.id);
-      const result = calculateRoute(start, end, obstacles, routingConfig, sc, tc);
+      const result = calculateRoute(start, end, nodeBoundsCache, routingConfig, sc, tc, grid);
 
       // Compute segments (inline version of computeSegments)
       const resolvedPoints = result.resolvedPoints;

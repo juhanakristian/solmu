@@ -22,6 +22,6 @@ export {
 export type { ClipboardData, PasteResult, DuplicateOptions } from "./clipboard";
 
 // Export routing utilities
-export { calculateRoute, getNodeBounds, calculateSimpleOrthogonalRoute, buildPathFromWaypoints } from "./routing";
+export { calculateRoute, getNodeBounds, calculateSimpleOrthogonalRoute, buildPathFromWaypoints, createSpatialGrid } from "./routing";
 export type { Point, Rectangle, NodeBounds, RoutingMode, RouteResult } from "./routing";
 

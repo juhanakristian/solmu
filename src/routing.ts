@@ -92,6 +92,91 @@ function pointInRect(point: Point, rect: Rectangle, margin: number = 0): boolean
 }
 
 /**
+ * Spatial hash grid for fast obstacle lookups.
+ * Divides world space into cells; each cell stores indices of overlapping obstacles.
+ */
+class SpatialGrid {
+  private cellSize: number;
+  private cells = new Map<string, number[]>();
+  private obstacles: NodeBounds[];
+  private margin: number;
+
+  constructor(obstacles: NodeBounds[], margin: number, cellSize: number) {
+    this.obstacles = obstacles;
+    this.margin = margin;
+    this.cellSize = cellSize;
+
+    // Index all obstacles into grid cells
+    const invCell = 1 / cellSize;
+    for (let i = 0; i < obstacles.length; i++) {
+      const b = obstacles[i].bounds;
+      const x0 = Math.floor((b.x - margin) * invCell);
+      const y0 = Math.floor((b.y - margin) * invCell);
+      const x1 = Math.floor((b.x + b.width + margin) * invCell);
+      const y1 = Math.floor((b.y + b.height + margin) * invCell);
+      for (let gx = x0; gx <= x1; gx++) {
+        for (let gy = y0; gy <= y1; gy++) {
+          const key = `${gx},${gy}`;
+          let cell = this.cells.get(key);
+          if (!cell) {
+            cell = [];
+            this.cells.set(key, cell);
+          }
+          cell.push(i);
+        }
+      }
+    }
+  }
+
+  /** Check if a point is blocked by any obstacle */
+  isPointBlocked(x: number, y: number): boolean {
+    const key = `${Math.floor(x / this.cellSize)},${Math.floor(y / this.cellSize)}`;
+    const cell = this.cells.get(key);
+    if (!cell) return false;
+    const m = this.margin;
+    for (let i = 0; i < cell.length; i++) {
+      const b = this.obstacles[cell[i]].bounds;
+      if (x >= b.x - m && x <= b.x + b.width + m &&
+          y >= b.y - m && y <= b.y + b.height + m) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Check if a line segment is blocked by any obstacle */
+  isSegmentBlocked(p1x: number, p1y: number, p2x: number, p2y: number): boolean {
+    // Collect unique obstacle indices from cells along the segment's bounding box
+    const invCell = 1 / this.cellSize;
+    const x0 = Math.floor(Math.min(p1x, p2x) * invCell);
+    const y0 = Math.floor(Math.min(p1y, p2y) * invCell);
+    const x1 = Math.floor(Math.max(p1x, p2x) * invCell);
+    const y1 = Math.floor(Math.max(p1y, p2y) * invCell);
+
+    const checked = new Set<number>();
+    const m = this.margin;
+    const p1 = { x: p1x, y: p1y };
+    const p2 = { x: p2x, y: p2y };
+
+    for (let gx = x0; gx <= x1; gx++) {
+      for (let gy = y0; gy <= y1; gy++) {
+        const cell = this.cells.get(`${gx},${gy}`);
+        if (!cell) continue;
+        for (let i = 0; i < cell.length; i++) {
+          const idx = cell[i];
+          if (checked.has(idx)) continue;
+          checked.add(idx);
+          if (lineIntersectsRect(p1, p2, this.obstacles[idx].bounds, m)) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+}
+
+/**
  * Check if a line segment intersects a rectangle
  */
 function lineIntersectsRect(
@@ -257,6 +342,18 @@ function distance(a: Point, b: Point): number {
 }
 
 /**
+ * Create a spatial grid index for a set of obstacles.
+ * Build once, reuse across all edge routing calls for the same node set.
+ */
+export function createSpatialGrid(
+  obstacles: NodeBounds[],
+  margin: number,
+  cellSize: number = 20
+): SpatialGrid {
+  return new SpatialGrid(obstacles, margin, cellSize);
+}
+
+/**
  * Check if a grid cell is blocked by any obstacle
  */
 function isBlocked(
@@ -291,13 +388,14 @@ function isPathBlocked(
 
 /**
  * A* pathfinding algorithm with orthogonal movement.
- * Uses a binary min-heap for the open set and numeric keys for the closed set.
+ * Uses a binary min-heap for the open set, spatial grid for obstacle checks.
  */
 function findPathAStar(
   start: Point,
   end: Point,
   obstacles: NodeBounds[],
-  config: InternalRoutingConfig
+  config: InternalRoutingConfig,
+  spatialGrid?: SpatialGrid
 ): Point[] | null {
   const { gridSize, margin } = config;
   const invGridSize = 1 / gridSize;
@@ -313,14 +411,14 @@ function findPathAStar(
   };
 
   // If direct path is clear, return it
-  if (!isPathBlocked(start, end, obstacles, margin)) {
+  const directBlocked = spatialGrid
+    ? spatialGrid.isSegmentBlocked(start.x, start.y, end.x, end.y)
+    : isPathBlocked(start, end, obstacles, margin);
+  if (!directBlocked) {
     return [start, end];
   }
 
-  // Use numeric grid indices for fast hashing
-  // Map grid coordinates to integer indices
   const toKey = (x: number, y: number): string => {
-    // Use rounded grid indices to avoid floating point issues
     const gx = Math.round(x * invGridSize);
     const gy = Math.round(y * invGridSize);
     return `${gx},${gy}`;
@@ -328,7 +426,6 @@ function findPathAStar(
 
   const openHeap = new MinHeap();
   const closedSet = new Set<string>();
-  // Track best g-score for each position to avoid duplicates in heap
   const gScores = new Map<string, number>();
 
   const h0 = heuristic(gridStart, gridEnd);
@@ -341,19 +438,12 @@ function findPathAStar(
     parent: null,
   };
 
-  const startKey = toKey(gridStart.x, gridStart.y);
   openHeap.push(startNode);
-  gScores.set(startKey, 0);
+  gScores.set(toKey(gridStart.x, gridStart.y), 0);
 
-  // Orthogonal directions (4-way movement)
-  const directions = [
-    { x: gridSize, y: 0 },
-    { x: -gridSize, y: 0 },
-    { x: 0, y: gridSize },
-    { x: 0, y: -gridSize },
-  ];
+  const dxs = [gridSize, -gridSize, 0, 0];
+  const dys = [0, 0, gridSize, -gridSize];
 
-  // Limit iterations to prevent infinite loops
   const maxIterations = 10000;
   let iterations = 0;
 
@@ -371,50 +461,40 @@ function findPathAStar(
       Math.abs(current.x - gridEnd.x) < gridSize &&
       Math.abs(current.y - gridEnd.y) < gridSize
     ) {
-      // Reconstruct path
       const path: Point[] = [end];
       let node: AStarNode | null = current;
-
       while (node !== null) {
         path.unshift({ x: node.x, y: node.y });
         node = node.parent;
       }
-
-      // Replace first point with actual start
       path[0] = start;
-
       return path;
     }
 
     // Explore neighbors
     for (let d = 0; d < 4; d++) {
-      const dir = directions[d];
-      const nx = current.x + dir.x;
-      const ny = current.y + dir.y;
+      const nx = current.x + dxs[d];
+      const ny = current.y + dys[d];
 
       const neighborKey = toKey(nx, ny);
-
       if (closedSet.has(neighborKey)) continue;
-      if (isBlocked({ x: nx, y: ny }, obstacles, margin)) continue;
 
-      // Check if path to neighbor is clear
-      if (isPathBlocked(
-        { x: current.x, y: current.y },
-        { x: nx, y: ny },
-        obstacles,
-        margin
-      )) {
-        continue;
+      // Use spatial grid for obstacle checks
+      if (spatialGrid) {
+        if (spatialGrid.isPointBlocked(nx, ny)) continue;
+        if (spatialGrid.isSegmentBlocked(current.x, current.y, nx, ny)) continue;
+      } else {
+        if (isBlocked({ x: nx, y: ny }, obstacles, margin)) continue;
+        if (isPathBlocked({ x: current.x, y: current.y }, { x: nx, y: ny }, obstacles, margin)) continue;
       }
 
       const g = current.g + gridSize;
 
-      // Skip if we already found a cheaper path to this position
       const existingG = gScores.get(neighborKey);
       if (existingG !== undefined && existingG <= g) continue;
       gScores.set(neighborKey, g);
 
-      const h = heuristic({ x: nx, y: ny }, gridEnd);
+      const h = Math.abs(nx - gridEnd.x) + Math.abs(ny - gridEnd.y);
 
       openHeap.push({
         x: nx,
@@ -770,6 +850,7 @@ export function calculateRoute(
   config: InternalRoutingConfig,
   sourceOffset?: Point,
   targetOffset?: Point,
+  spatialGrid?: SpatialGrid,
 ): RouteResult {
   const { mode, cornerRadius = 5, stubLength = 0 } = config;
 
@@ -796,7 +877,7 @@ export function calculateRoute(
   }
 
   // Find path using A*
-  const astarPath = findPathAStar(routeStart, routeEnd, obstacles, config);
+  const astarPath = findPathAStar(routeStart, routeEnd, obstacles, config, spatialGrid);
 
   if (!astarPath || astarPath.length === 0) {
     // Fallback: still include stubs even on direct fallback
