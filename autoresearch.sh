@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-# Quick syntax check
-npx tsc --noEmit --skipLibCheck src/routing.ts src/viewport.ts src/types.ts 2>&1 | head -5 || {
+# Quick syntax check using project tsconfig
+npx tsc --noEmit 2>&1 | head -5 || {
   echo "TypeScript compilation failed"
   exit 1
 }
