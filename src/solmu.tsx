@@ -457,12 +457,13 @@ export function useSolmu({
     return map;
   }, [data.nodes]);
 
-  // Get node bounds for obstacle avoidance
-  const nodeBoundsCache = config.routing?.avoidNodes === false
-    ? []
-    : getNodeBounds(data.nodes, undefined, config.routing?.nodeDimensions);
+  // Get node bounds for obstacle avoidance (memoized)
+  const nodeBoundsCache = React.useMemo(() => {
+    if (config.routing?.avoidNodes === false) return [];
+    return getNodeBounds(data.nodes, undefined, config.routing?.nodeDimensions);
+  }, [data.nodes, config.routing?.avoidNodes, config.routing?.nodeDimensions]);
 
-  // Build spatial grid once for all edges
+  // Build spatial grid once for all edges (memoized, depends on nodeBoundsCache)
   const spatialGridRef = React.useMemo(() => {
     if (nodeBoundsCache.length === 0) return undefined;
     return createSpatialGrid(nodeBoundsCache, routingConfig.margin);
