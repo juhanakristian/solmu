@@ -439,6 +439,15 @@ export function useSolmu({
     stubLength: config.routing?.stubLength ?? 0,
   };
 
+  // Build renderer map for O(1) type lookups
+  const rendererMap = React.useMemo(() => {
+    const map = new Map<string, React.FC<any>>();
+    for (const r of config.renderers) {
+      map.set(r.type, r.component);
+    }
+    return map;
+  }, [config.renderers]);
+
   // Build node map for O(1) lookups
   const nodeMap = React.useMemo(() => {
     const map = new Map<string, typeof data.nodes[0]>();
@@ -609,7 +618,7 @@ export function useSolmu({
     },
     elements: {
       nodes: data.nodes.map((node) => {
-        const renderer = config.renderers.find((r) => r.type === node.type)?.component;
+        const renderer = rendererMap.get(node.type);
         if (!renderer) {
           throw new Error(`No renderer found for node type ${node.type}`);
         }

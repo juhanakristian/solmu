@@ -40,4 +40,28 @@ Optimize the core computation in Solmu's graph library so it remains performant 
 7. **`isBlocked`/`isPathBlocked`** — Linear scan of all obstacles for every grid cell check.
 
 ## What's Been Tried
-(nothing yet — baseline run pending)
+
+### Major wins
+1. **Spatial hash grid for obstacle lookups** — Replaced O(n) linear scan with O(1) amortized spatial grid. 106→14.6ms (7.3x). Biggest single improvement.
+2. **Node Map for O(1) lookups** — Replaced `nodes.find()` with Map in useSolmu and benchmark. 14.6→5.45ms.
+3. **Numeric hash keys** — Both spatial grid and A* switched from string to numeric keys. 5.02→4.43ms.
+4. **Inline 2-point fast path** — Skip simplify/midpoint/endpoint overhead for direct routes. 4.43→2.89ms (35%).
+
+### Minor wins
+- Binary heap for A* open set (minimal impact since most edges use direct path)
+- Generation counter in isSegmentBlocked (avoids Set GC)
+- getNodeBounds loop optimization (avoid temp arrays, Math.max spread)
+- Array.join for SVG path building (faster than string concat)
+
+### Dead ends (no improvement or regression)
+- Zero-allocation coordinate-passing (V8 can't inline functions with many params)
+- Skip A* segment check (causes invalid paths)
+- Connector pre-index map (construction cost > savings for 4 connectors)
+- Single-cell fast path in isSegmentBlocked (within noise)
+- Move direct-path check before grid snapping (V8 JIT sensitivity)
+- isLineBlocked wrapper (extra dispatch negates savings)
+
+### Current state
+- **2.89ms total** for 100+400+900 node graphs (37x improvement from 106ms baseline)
+- ~1µs per edge in full cycle — approaching V8 overhead floor
+- 2500-node graph: 5.27ms cycle (tested but not tracked as primary metric)
