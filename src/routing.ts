@@ -186,6 +186,63 @@ interface AStarNode {
 }
 
 /**
+ * Binary min-heap for A* open set, ordered by f score.
+ */
+class MinHeap {
+  private heap: AStarNode[] = [];
+
+  get size(): number {
+    return this.heap.length;
+  }
+
+  push(node: AStarNode): void {
+    this.heap.push(node);
+    this._bubbleUp(this.heap.length - 1);
+  }
+
+  pop(): AStarNode | undefined {
+    const heap = this.heap;
+    if (heap.length === 0) return undefined;
+    const top = heap[0];
+    const last = heap.pop()!;
+    if (heap.length > 0) {
+      heap[0] = last;
+      this._sinkDown(0);
+    }
+    return top;
+  }
+
+  private _bubbleUp(i: number): void {
+    const heap = this.heap;
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (heap[i].f >= heap[parent].f) break;
+      const tmp = heap[i];
+      heap[i] = heap[parent];
+      heap[parent] = tmp;
+      i = parent;
+    }
+  }
+
+  private _sinkDown(i: number): void {
+    const heap = this.heap;
+    const len = heap.length;
+    while (true) {
+      let smallest = i;
+      const left = 2 * i + 1;
+      const right = 2 * i + 2;
+      if (left < len && heap[left].f < heap[smallest].f) smallest = left;
+      if (right < len && heap[right].f < heap[smallest].f) smallest = right;
+      if (smallest === i) break;
+      const tmp = heap[i];
+      heap[i] = heap[smallest];
+      heap[smallest] = tmp;
+      i = smallest;
+    }
+  }
+}
+
+/**
  * Manhattan distance heuristic
  */
 function heuristic(a: Point, b: Point): number {
@@ -233,7 +290,8 @@ function isPathBlocked(
 }
 
 /**
- * A* pathfinding algorithm with orthogonal movement
+ * A* pathfinding algorithm with orthogonal movement.
+ * Uses a binary min-heap for the open set and numeric keys for the closed set.
  */
 function findPathAStar(
   start: Point,
@@ -242,15 +300,16 @@ function findPathAStar(
   config: InternalRoutingConfig
 ): Point[] | null {
   const { gridSize, margin } = config;
+  const invGridSize = 1 / gridSize;
 
   // Snap start and end to grid
   const gridStart = {
-    x: Math.round(start.x / gridSize) * gridSize,
-    y: Math.round(start.y / gridSize) * gridSize,
+    x: Math.round(start.x * invGridSize) * gridSize,
+    y: Math.round(start.y * invGridSize) * gridSize,
   };
   const gridEnd = {
-    x: Math.round(end.x / gridSize) * gridSize,
-    y: Math.round(end.y / gridSize) * gridSize,
+    x: Math.round(end.x * invGridSize) * gridSize,
+    y: Math.round(end.y * invGridSize) * gridSize,
   };
 
   // If direct path is clear, return it
@@ -258,19 +317,33 @@ function findPathAStar(
     return [start, end];
   }
 
-  const openSet: AStarNode[] = [];
-  const closedSet = new Set<string>();
+  // Use numeric grid indices for fast hashing
+  // Map grid coordinates to integer indices
+  const toKey = (x: number, y: number): string => {
+    // Use rounded grid indices to avoid floating point issues
+    const gx = Math.round(x * invGridSize);
+    const gy = Math.round(y * invGridSize);
+    return `${gx},${gy}`;
+  };
 
+  const openHeap = new MinHeap();
+  const closedSet = new Set<string>();
+  // Track best g-score for each position to avoid duplicates in heap
+  const gScores = new Map<string, number>();
+
+  const h0 = heuristic(gridStart, gridEnd);
   const startNode: AStarNode = {
     x: gridStart.x,
     y: gridStart.y,
     g: 0,
-    h: heuristic(gridStart, gridEnd),
-    f: heuristic(gridStart, gridEnd),
+    h: h0,
+    f: h0,
     parent: null,
   };
 
-  openSet.push(startNode);
+  const startKey = toKey(gridStart.x, gridStart.y);
+  openHeap.push(startNode);
+  gScores.set(startKey, 0);
 
   // Orthogonal directions (4-way movement)
   const directions = [
@@ -284,14 +357,12 @@ function findPathAStar(
   const maxIterations = 10000;
   let iterations = 0;
 
-  while (openSet.length > 0 && iterations < maxIterations) {
+  while (openHeap.size > 0 && iterations < maxIterations) {
     iterations++;
 
-    // Find node with lowest f score
-    openSet.sort((a, b) => a.f - b.f);
-    const current = openSet.shift()!;
+    const current = openHeap.pop()!;
 
-    const key = `${current.x},${current.y}`;
+    const key = toKey(current.x, current.y);
     if (closedSet.has(key)) continue;
     closedSet.add(key);
 
@@ -316,21 +387,20 @@ function findPathAStar(
     }
 
     // Explore neighbors
-    for (const dir of directions) {
-      const neighborPos = {
-        x: current.x + dir.x,
-        y: current.y + dir.y,
-      };
+    for (let d = 0; d < 4; d++) {
+      const dir = directions[d];
+      const nx = current.x + dir.x;
+      const ny = current.y + dir.y;
 
-      const neighborKey = `${neighborPos.x},${neighborPos.y}`;
+      const neighborKey = toKey(nx, ny);
 
       if (closedSet.has(neighborKey)) continue;
-      if (isBlocked(neighborPos, obstacles, margin)) continue;
+      if (isBlocked({ x: nx, y: ny }, obstacles, margin)) continue;
 
       // Check if path to neighbor is clear
       if (isPathBlocked(
         { x: current.x, y: current.y },
-        neighborPos,
+        { x: nx, y: ny },
         obstacles,
         margin
       )) {
@@ -338,25 +408,20 @@ function findPathAStar(
       }
 
       const g = current.g + gridSize;
-      const h = heuristic(neighborPos, gridEnd);
-      const f = g + h;
 
-      // Check if neighbor is already in open set with lower cost
-      const existingIndex = openSet.findIndex(
-        n => n.x === neighborPos.x && n.y === neighborPos.y
-      );
+      // Skip if we already found a cheaper path to this position
+      const existingG = gScores.get(neighborKey);
+      if (existingG !== undefined && existingG <= g) continue;
+      gScores.set(neighborKey, g);
 
-      if (existingIndex !== -1) {
-        if (openSet[existingIndex].g <= g) continue;
-        openSet.splice(existingIndex, 1);
-      }
+      const h = heuristic({ x: nx, y: ny }, gridEnd);
 
-      openSet.push({
-        x: neighborPos.x,
-        y: neighborPos.y,
+      openHeap.push({
+        x: nx,
+        y: ny,
         g,
         h,
-        f,
+        f: g + h,
         parent: current,
       });
     }
