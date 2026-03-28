@@ -440,15 +440,16 @@ function findPathAStar(
     return [start, end];
   }
 
-  const toKey = (x: number, y: number): string => {
+  // Use numeric keys for A* sets — hash grid indices with a large prime stride
+  const toKey = (x: number, y: number): number => {
     const gx = Math.round(x * invGridSize);
     const gy = Math.round(y * invGridSize);
-    return `${gx},${gy}`;
+    return ((gx + 100000) * 200003) + (gy + 100000);
   };
 
   const openHeap = new MinHeap();
-  const closedSet = new Set<string>();
-  const gScores = new Map<string, number>();
+  const closedSet = new Set<number>();
+  const gScores = new Map<number, number>();
 
   const h0 = heuristic(gridStart, gridEnd);
   const startNode: AStarNode = {
