@@ -186,19 +186,24 @@ export function useSolmu({
           }
         }
 
-        // Clear waypoints on all edges connected to any moved node
+        // Clear waypoints on edges connected to moved nodes (using adjacency index)
         if (onEdgePathChange) {
           const movedNodeIds = selectedNodeIds.has(dragItem) && selectedNodeIds.size > 1
             ? selectedNodeIds
             : new Set([dragItem]);
-          data.edges.forEach((edge, index) => {
-            if (edge.waypoints && edge.waypoints.length > 0) {
-              if (movedNodeIds.has(edge.source.node) || movedNodeIds.has(edge.target.node)) {
+          const seen = new Set<number>();
+          for (const nodeId of movedNodeIds) {
+            const connected = edgesByNode.get(nodeId);
+            if (!connected) continue;
+            for (const { edge, index } of connected) {
+              if (seen.has(index)) continue;
+              seen.add(index);
+              if (edge.waypoints && edge.waypoints.length > 0) {
                 const edgeId = `${edge.source.node}-${edge.target.node}-${index}`;
                 onEdgePathChange(edgeId, []);
               }
             }
-          });
+          }
         }
       }
     }
@@ -456,6 +461,25 @@ export function useSolmu({
     }
     return map;
   }, [data.nodes]);
+
+  // Build edge adjacency index: node id -> list of (edge, index) for connected edges
+  const edgesByNode = React.useMemo(() => {
+    const map = new Map<string, Array<{ edge: typeof data.edges[0]; index: number }>>();
+    for (let i = 0; i < data.edges.length; i++) {
+      const edge = data.edges[i];
+      const srcId = edge.source.node;
+      const tgtId = edge.target.node;
+      let srcList = map.get(srcId);
+      if (!srcList) { srcList = []; map.set(srcId, srcList); }
+      srcList.push({ edge, index: i });
+      if (srcId !== tgtId) {
+        let tgtList = map.get(tgtId);
+        if (!tgtList) { tgtList = []; map.set(tgtId, tgtList); }
+        tgtList.push({ edge, index: i });
+      }
+    }
+    return map;
+  }, [data.edges]);
 
   // Get node bounds for obstacle avoidance (memoized)
   const nodeBoundsCache = React.useMemo(() => {

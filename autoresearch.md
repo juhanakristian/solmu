@@ -62,9 +62,11 @@ Optimize the core computation in Solmu's graph library so it remains performant 
 - isLineBlocked wrapper (extra dispatch negates savings)
 
 ### Current state
-- **~2.90ms total** for 100+400+900 node graphs (37x improvement from 106ms baseline)
+- **~2.78ms total** for 100+400+900 node graphs (38x improvement from 106ms baseline)
 - ~0.83µs per edge in full cycle — approaching V8 overhead floor
 - 2500-node graph: ~5.3ms cycle
 - Breakdown for 900-node graph: grid_build=0.16ms, map=0.05ms, bounds=0.02ms, routing=1.45ms
+- All data.nodes.find() calls in useSolmu replaced with O(1) Map lookups
+- All memoizable computations (nodeMap, nodeBounds, spatialGrid, rendererMap) are properly memoized
 - Further micro-optimizations are hitting V8 JIT sensitivity (some changes regress)
 - Next big wins: incremental routing, virtualization (see ideas file)
