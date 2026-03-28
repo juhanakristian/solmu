@@ -63,9 +63,9 @@ function median(arr: number[]): number {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-function benchmarkFn(fn: () => void, iterations: number = 5): number {
+function benchmarkFn(fn: () => void, iterations: number = 11): number {
   // Warmup
-  for (let i = 0; i < 2; i++) fn();
+  for (let i = 0; i < 3; i++) fn();
 
   const times: number[] = [];
   for (let i = 0; i < iterations; i++) {
