@@ -105,6 +105,7 @@ class SpatialGrid {
     this.obstacles = obstacles;
     this.margin = margin;
     this.cellSize = cellSize;
+    this._checkedAt = new Int32Array(obstacles.length);
 
     // Index all obstacles into grid cells
     const invCell = 1 / cellSize;
@@ -144,16 +145,22 @@ class SpatialGrid {
     return false;
   }
 
+  // Reusable generation counter to avoid Set allocation per call
+  private _checkGen = 0;
+  private _checkedAt: Int32Array;
+
   /** Check if a line segment is blocked by any obstacle */
   isSegmentBlocked(p1x: number, p1y: number, p2x: number, p2y: number): boolean {
-    // Collect unique obstacle indices from cells along the segment's bounding box
     const invCell = 1 / this.cellSize;
     const x0 = Math.floor(Math.min(p1x, p2x) * invCell);
     const y0 = Math.floor(Math.min(p1y, p2y) * invCell);
     const x1 = Math.floor(Math.max(p1x, p2x) * invCell);
     const y1 = Math.floor(Math.max(p1y, p2y) * invCell);
 
-    const checked = new Set<number>();
+    // Use generation counter instead of Set for deduplication
+    this._checkGen++;
+    const gen = this._checkGen;
+    const checkedAt = this._checkedAt;
     const m = this.margin;
     const p1 = { x: p1x, y: p1y };
     const p2 = { x: p2x, y: p2y };
@@ -164,8 +171,8 @@ class SpatialGrid {
         if (!cell) continue;
         for (let i = 0; i < cell.length; i++) {
           const idx = cell[i];
-          if (checked.has(idx)) continue;
-          checked.add(idx);
+          if (checkedAt[idx] === gen) continue;
+          checkedAt[idx] = gen;
           if (lineIntersectsRect(p1, p2, this.obstacles[idx].bounds, m)) {
             return true;
           }
