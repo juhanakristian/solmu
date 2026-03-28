@@ -172,10 +172,12 @@ function benchFullCycle(nodes: SolmuNode<any>[], edges: Edge[], label: string) {
   const ms = benchmarkFn(() => {
     const nodeBoundsCache = getNodeBounds(nodes, undefined, { width: 15, height: 5 });
     const grid = createSpatialGrid(nodeBoundsCache, routingConfig.margin);
+    // Build node map for O(1) lookups (mirrors what useSolmu should do)
+    const nodeMap = new Map(nodes.map(n => [n.id, n]));
 
     for (const edge of edges) {
-      const source = nodes.find(n => n.id === edge.source.node);
-      const target = nodes.find(n => n.id === edge.target.node);
+      const source = nodeMap.get(edge.source.node);
+      const target = nodeMap.get(edge.target.node);
       if (!source || !target) continue;
 
       const sc = source.connectors?.find(c => c.id === edge.source.connector);

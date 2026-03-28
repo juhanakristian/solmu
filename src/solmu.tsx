@@ -1,7 +1,7 @@
 import React from "react";
 import { SolmuNodeConnector, UseSolmuParams, UseSolmuResult, EdgeSegment } from "./types";
 import { SolmuViewport } from "./viewport";
-import { calculateRoute, buildPathFromWaypoints, getNodeBounds, type InternalRoutingConfig, type NodeBounds, type Point } from "./routing";
+import { calculateRoute, buildPathFromWaypoints, getNodeBounds, createSpatialGrid, type InternalRoutingConfig, type NodeBounds, type Point } from "./routing";
 
 /**
  * Compute edge segments from resolved waypoints for hit testing and dragging.
@@ -439,16 +439,31 @@ export function useSolmu({
     stubLength: config.routing?.stubLength ?? 0,
   };
 
+  // Build node map for O(1) lookups
+  const nodeMap = React.useMemo(() => {
+    const map = new Map<string, typeof data.nodes[0]>();
+    for (const node of data.nodes) {
+      map.set(node.id, node);
+    }
+    return map;
+  }, [data.nodes]);
+
   // Get node bounds for obstacle avoidance
   const nodeBoundsCache = config.routing?.avoidNodes === false
     ? []
     : getNodeBounds(data.nodes, undefined, config.routing?.nodeDimensions);
 
+  // Build spatial grid once for all edges
+  const spatialGridRef = React.useMemo(() => {
+    if (nodeBoundsCache.length === 0) return undefined;
+    return createSpatialGrid(nodeBoundsCache, routingConfig.margin);
+  }, [nodeBoundsCache, routingConfig.margin]);
+
   const createEdgeRoute = (edge: typeof data.edges[0]) => {
     const fallback = { path: "", labelPoint: { x: 0, y: 0 }, labelAngle: 0, resolvedPoints: [] as Point[], sourceLabelPoint: { x: 0, y: 0 }, targetLabelPoint: { x: 0, y: 0 } };
 
-    const source = data.nodes.find((n) => n.id === edge.source.node);
-    const target = data.nodes.find((n) => n.id === edge.target.node);
+    const source = nodeMap.get(edge.source.node);
+    const target = nodeMap.get(edge.target.node);
     if (!source || !target) return fallback;
 
     const sc = source.connectors?.find((c) => c.id === edge.source.connector);
@@ -503,12 +518,7 @@ export function useSolmu({
       );
     }
 
-    // Filter out source and target nodes from obstacles
-    const obstacles = nodeBoundsCache.filter(
-      (ob) => ob.id !== source.id && ob.id !== target.id
-    );
-
-    return calculateRoute(start, end, obstacles, { ...routingConfig, mode }, sc, tc);
+    return calculateRoute(start, end, nodeBoundsCache, { ...routingConfig, mode }, sc, tc, spatialGridRef);
   };
 
   // Handle segment drag start — captures initial state for drag calculations
