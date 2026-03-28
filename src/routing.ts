@@ -109,9 +109,13 @@ class SpatialGrid {
   private cells = new Map<number, number[]>();
   private obstacles: NodeBounds[];
   private margin: number;
+  // Pre-expanded obstacle bounds for fast checking (avoids margin computation per check)
+  private obMinX: Float64Array;
+  private obMaxX: Float64Array;
+  private obMinY: Float64Array;
+  private obMaxY: Float64Array;
 
   // Hash grid coordinates to a single number.
-  // Offset to handle negative coords, then combine with a large prime stride.
   private static hashCell(gx: number, gy: number): number {
     return ((gx + 100000) * 200003) + (gy + 100000);
   }
@@ -123,14 +127,30 @@ class SpatialGrid {
     this.invCellSize = 1 / cellSize;
     this._checkedAt = new Int32Array(obstacles.length);
 
+    // Pre-expand obstacle bounds with margin (once during construction)
+    const n = obstacles.length;
+    this.obMinX = new Float64Array(n);
+    this.obMaxX = new Float64Array(n);
+    this.obMinY = new Float64Array(n);
+    this.obMaxY = new Float64Array(n);
+
     // Index all obstacles into grid cells
     const invCell = this.invCellSize;
-    for (let i = 0; i < obstacles.length; i++) {
+    for (let i = 0; i < n; i++) {
       const b = obstacles[i].bounds;
-      const x0 = Math.floor((b.x - margin) * invCell);
-      const y0 = Math.floor((b.y - margin) * invCell);
-      const x1 = Math.floor((b.x + b.width + margin) * invCell);
-      const y1 = Math.floor((b.y + b.height + margin) * invCell);
+      const minX = b.x - margin;
+      const minY = b.y - margin;
+      const maxX = b.x + b.width + margin;
+      const maxY = b.y + b.height + margin;
+      this.obMinX[i] = minX;
+      this.obMinY[i] = minY;
+      this.obMaxX[i] = maxX;
+      this.obMaxY[i] = maxY;
+
+      const x0 = Math.floor(minX * invCell);
+      const y0 = Math.floor(minY * invCell);
+      const x1 = Math.floor(maxX * invCell);
+      const y1 = Math.floor(maxY * invCell);
       for (let gx = x0; gx <= x1; gx++) {
         for (let gy = y0; gy <= y1; gy++) {
           const key = SpatialGrid.hashCell(gx, gy);
@@ -150,11 +170,10 @@ class SpatialGrid {
     const key = SpatialGrid.hashCell(Math.floor(x * this.invCellSize), Math.floor(y * this.invCellSize));
     const cell = this.cells.get(key);
     if (!cell) return false;
-    const m = this.margin;
     for (let i = 0; i < cell.length; i++) {
-      const b = this.obstacles[cell[i]].bounds;
-      if (x >= b.x - m && x <= b.x + b.width + m &&
-          y >= b.y - m && y <= b.y + b.height + m) {
+      const idx = cell[i];
+      if (x >= this.obMinX[idx] && x <= this.obMaxX[idx] &&
+          y >= this.obMinY[idx] && y <= this.obMaxY[idx]) {
         return true;
       }
     }
