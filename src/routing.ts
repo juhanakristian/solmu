@@ -901,6 +901,56 @@ export function calculateRoute(
   // Find path using A*
   const astarPath = findPathAStar(routeStart, routeEnd, obstacles, config, spatialGrid);
 
+  // Fast path: direct route with no stubs (most common case for adjacent nodes).
+  // Skip simplifyPath/orthogonalizePoints/midpointOfPolyline overhead.
+  if (astarPath && astarPath.length === 2 && !startStub && !endStub) {
+    const p1 = astarPath[0], p2 = astarPath[1];
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+    const midX = (p1.x + p2.x) * 0.5;
+    const midY = (p1.y + p2.y) * 0.5;
+
+    // Endpoint label points (inline of endpointLabelPoints for 2 points)
+    let srcLabel: Point, tgtLabel: Point;
+    if (len < 0.01) {
+      srcLabel = p1;
+      tgtLabel = p2;
+    } else {
+      const t = Math.min(8 / len, 0.5);
+      const nx = -dy / len * 4;
+      const ny = dx / len * 4;
+      srcLabel = { x: p1.x + dx * t + nx, y: p1.y + dy * t + ny };
+      tgtLabel = { x: p2.x - dx * t + nx, y: p2.y - dy * t + ny };
+    }
+
+    let path: string;
+    if (mode === 'bezier') {
+      // 2-point bezier
+      const cx1 = p1.x + dx * 0.3;
+      const cy1 = p1.y;
+      const cx2 = p2.x - dx * 0.3;
+      const cy2 = p2.y;
+      path = `M${p1.x},${p1.y} C${cx1},${cy1} ${cx2},${cy2} ${p2.x},${p2.y}`;
+    } else if (p1.x === p2.x || p1.y === p2.y) {
+      // Axis-aligned line
+      path = `M${p1.x},${p1.y} L${p2.x},${p2.y}`;
+    } else {
+      // Orthogonal: horizontal then vertical
+      path = `M${p1.x},${p1.y} L${p2.x},${p1.y} L${p2.x},${p2.y}`;
+    }
+
+    return {
+      path,
+      labelPoint: { x: midX, y: midY },
+      labelAngle: angle,
+      resolvedPoints: astarPath,
+      sourceLabelPoint: srcLabel,
+      targetLabelPoint: tgtLabel,
+    };
+  }
+
   if (!astarPath || astarPath.length === 0) {
     // Fallback: still include stubs even on direct fallback
     if (startStub || endStub) {
