@@ -715,6 +715,15 @@ export function useSolmu({
     [viewport]
   );
 
+  // Memoize viewport helpers — stable closures over viewport instance
+  const viewportHelpers = React.useMemo(() => ({
+    screenToWorld: (x: number, y: number) => viewport.screenToWorld(x, y),
+    worldToScreen: (x: number, y: number) => viewport.worldToScreen(x, y),
+    snapToGrid: (point: { x: number; y: number }) => viewport.snapToGrid(point),
+    formatCoordinate: (value: number) => viewport.formatCoordinate(value),
+    getEffectiveGridSize: () => viewport.getEffectiveGridSize(),
+  }), [viewport]);
+
   return {
     canvas: {
       props: {
@@ -733,13 +742,7 @@ export function useSolmu({
       height: viewport.getConfig().height,
       viewBox: viewport.getViewBox(),
       gridDots: gridDots,
-      viewport: {
-        screenToWorld: (x: number, y: number) => viewport.screenToWorld(x, y),
-        worldToScreen: (x: number, y: number) => viewport.worldToScreen(x, y),
-        snapToGrid: (point: { x: number; y: number }) => viewport.snapToGrid(point),
-        formatCoordinate: (value: number) => viewport.formatCoordinate(value),
-        getEffectiveGridSize: () => viewport.getEffectiveGridSize(),
-      },
+      viewport: viewportHelpers,
     },
     elements: {
       nodes: data.nodes.map((node) => {
