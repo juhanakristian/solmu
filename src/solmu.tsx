@@ -709,6 +709,12 @@ export function useSolmu({
     return newRoutes;
   }, [data.nodes, data.edges, nodeBoundsCache, spatialGridRef, routingConfig]);
 
+  // Memoize grid dots — only regenerate when viewport config changes
+  const gridDots = React.useMemo(
+    () => viewport.generateGridDots(),
+    [viewport]
+  );
+
   return {
     canvas: {
       props: {
@@ -726,7 +732,7 @@ export function useSolmu({
       width: viewport.getConfig().width,
       height: viewport.getConfig().height,
       viewBox: viewport.getViewBox(),
-      gridDots: viewport.generateGridDots(),
+      gridDots: gridDots,
       viewport: {
         screenToWorld: (x: number, y: number) => viewport.screenToWorld(x, y),
         worldToScreen: (x: number, y: number) => viewport.worldToScreen(x, y),
