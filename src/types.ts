@@ -231,6 +231,7 @@ export type UseSolmuParams = {
     };
   };
   onNodeMove?: NodeMoveFunc;
+  onNodeMoveEnd?: () => void;
   onConnect?: ConnectFunc;
   onNodeClick?: (nodeId: string) => void;
   onEdgeClick?: (edgeId: string) => void;

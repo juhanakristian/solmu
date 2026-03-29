@@ -49,6 +49,7 @@ function computeSegments(resolvedPoints: Point[]): EdgeSegment[] {
 export function useSolmu({
   data,
   onNodeMove,
+  onNodeMoveEnd,
   onConnect,
   onNodeClick,
   onEdgeClick,
@@ -124,7 +125,14 @@ export function useSolmu({
   }
 
   function onMouseUp(_event: React.MouseEvent) {
-    if (dragItem) setDragItem(null);
+    if (dragItem) {
+      setDragItem(null);
+      // Invalidate edge route cache so full A* routing recalculates on next render
+      if (edgeRouteCache.current) {
+        edgeRouteCache.current.prevNodes = null as any;
+      }
+      if (onNodeMoveEnd) onNodeMoveEnd();
+    }
     if (dragSegment) setDragSegment(null);
     // Finish marquee selection
     if (marquee) {
