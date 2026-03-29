@@ -1,35 +1,22 @@
-# Autoresearch Ideas
+# Autoresearch Ideas — 200 Table Performance
 
-## Tried and working (implemented)
-- Binary heap for A* open set
-- Spatial hash grid for obstacle lookups
-- Node Map for O(1) lookups
-- Generation counter for dedup in isSegmentBlocked
-- Numeric hash keys (spatial grid + A*)
-- Inline 2-point fast path in calculateRoute
-- getNodeBounds loop optimization
+## Implemented this session
+- **measureTable WeakMap cache** — avoids redundant computations (9x faster)
+- **React.memo on TableNode, EdgeRenderer, ConnectorDot** — with custom comparators
+- **Memoized NodeWrapper** in Canvas.tsx — skips re-render for unchanged nodes
+- **useMemo for edge routes** — routes don't recompute on selection/hover changes
+- **Incremental edge routing** — only reroute edges connected to moved nodes during drag
+- **Canvas React.memo** — prevents unnecessary re-renders
 
-## Tried and didn't work
-- Zero-allocation lineIntersectsRectXY (too many params, V8 can't inline)
+## Still promising
+- **Stable callback refs in useSolmu** — use useCallback + node ID dispatch pattern so React.memo default comparison works. Currently custom comparators ignore callback changes, which is correct but fragile.
+- **Skip obstacle avoidance during drag** — use direct/bezier routing while actively dragging, then recompute with A* on mouseUp. Would make drag always fast regardless of graph complexity.
+- **Virtualization** — only render nodes/edges visible in viewport. SVG DOM with 200 tables has ~5000 elements; showing only visible ~50 would be 4x fewer.
+- **SVG element reduction in TableNode** — currently ~15 SVG elements per table. Could merge some (e.g., combine all text into one text element with tspans).
+- **requestAnimationFrame throttling for drag** — batch multiple mouse moves into one frame update.
+- **Separate drag state from data** — keep node positions in a ref during drag, only commit to state on mouseUp. Avoids React re-render cascade during drag entirely.
 
-## Not yet tried (promising)
-- **Incremental routing**: Only re-route edges whose source/target nodes changed position. Track node positions with a dirty set. Would skip 99% of routing work during node drag (only edges connected to dragged node need update). Biggest potential win for interactive performance.
-- **Virtualization**: Only compute routes for edges visible in the current viewport. Would make performance independent of total graph size — only matters how many edges are visible.
-- **Web Worker offloading**: Move routing computation to worker thread for large graphs. Keeps main thread responsive. Needs double-buffering pattern.
-- **React.memo for edge/node components**: Prevent re-renders when edge/node data hasn't changed. React-level optimization.
-
-## Not yet tried (diminishing returns likely)
-- **Typed array for A* nodes**: Use flat arrays instead of objects for AStarNode to reduce GC pressure. But A* rarely runs (most paths are direct).
-- **Quadtree for obstacles**: May be slightly faster than spatial hash but construction cost may negate benefits.
-- **Batch SVG path generation**: Cache-friendly iteration but benchmark shows per-edge cost is already ~0.83µs.
-- **Sorted obstacle array + binary search**: For direct-path checks only, pre-sort by x and binary search. Might save 0.1ms.
-
-## Tried and didn't work
-- Zero-allocation coordinate-passing (V8 can't inline many-param functions)
-- Skip A* segment check (causes invalid paths, longer A* searches)
-- Connector pre-index map (construction cost > savings for 4 connectors/node)
-- Single-cell fast path in isSegmentBlocked (within noise)
-- Move direct-path check before grid snapping (V8 JIT sensitivity)
-- isLineBlocked wrapper (extra dispatch overhead)
-- String concat vs array.join for SVG paths (array.join wins)
-- Avoid sqrt in simplifyPath (function shape change caused V8 deopt)
+## Not worth pursuing
+- **Pure JS computation optimizations** — already at 0.13ms for 200 tables, well under 1ms budget.
+- **measureTable optimization beyond caching** — already fast enough with WeakMap.
+- **computeConnectors optimization** — only called on schema changes, not during drag/pan.

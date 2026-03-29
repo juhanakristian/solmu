@@ -71,6 +71,8 @@ export function useSolmu({
     });
   }, [config.viewport]);
   const [dragItem, setDragItem] = React.useState<string | null>(null);
+  const dragItemRef = React.useRef<string | null>(null);
+  dragItemRef.current = dragItem;
   // Offset from mouse to node origin at drag start, so the node doesn't jump
   const [dragOffset, setDragOffset] = React.useState<Point>({ x: 0, y: 0 });
 
@@ -669,15 +671,34 @@ export function useSolmu({
       return cache.routes;
     }
 
-    // Only recompute edges connected to moved nodes
+    // Only recompute edges connected to moved nodes.
+    // During active drag, use direct routing (skip A* obstacle avoidance) for speed.
     const newRoutes = cache.routes.slice(); // shallow copy
+    const isDragging = dragItemRef.current !== null;
     for (let index = 0; index < data.edges.length; index++) {
       const edge = data.edges[index];
       if (movedNodeIds.has(edge.source.node) || movedNodeIds.has(edge.target.node)) {
-        const { path, labelPoint, labelAngle, resolvedPoints, sourceLabelPoint, targetLabelPoint } = createEdgeRoute(edge);
-        const edgeId = `${edge.source.node}-${edge.target.node}-${index}`;
-        const segments = computeSegments(resolvedPoints);
-        newRoutes[index] = { id: edgeId, path, labelPoint, labelAngle, sourceLabelPoint, targetLabelPoint, resolvedWaypoints: resolvedPoints, segments };
+        if (isDragging) {
+          // Fast path during drag: direct routing (no A*)
+          const source = nodeMap.get(edge.source.node);
+          const target = nodeMap.get(edge.target.node);
+          if (source && target) {
+            const sc = source.connectors?.find((c) => c.id === edge.source.connector);
+            const tc = target.connectors?.find((c) => c.id === edge.target.connector);
+            if (sc && tc) {
+              const start = { x: source.x + sc.x, y: source.y + sc.y };
+              const end = { x: target.x + tc.x, y: target.y + tc.y };
+              const directResult = calculateRoute(start, end, [], { ...routingConfig, mode: 'direct' }, sc, tc);
+              const edgeId = `${edge.source.node}-${edge.target.node}-${index}`;
+              newRoutes[index] = { id: edgeId, ...directResult, resolvedWaypoints: directResult.resolvedPoints, segments: computeSegments(directResult.resolvedPoints) };
+            }
+          }
+        } else {
+          const { path, labelPoint, labelAngle, resolvedPoints, sourceLabelPoint, targetLabelPoint } = createEdgeRoute(edge);
+          const edgeId = `${edge.source.node}-${edge.target.node}-${index}`;
+          const segments = computeSegments(resolvedPoints);
+          newRoutes[index] = { id: edgeId, path, labelPoint, labelAngle, sourceLabelPoint, targetLabelPoint, resolvedWaypoints: resolvedPoints, segments };
+        }
       }
     }
 

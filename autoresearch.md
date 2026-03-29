@@ -50,4 +50,17 @@ Core routing was optimized from 106ms to ~2.8ms (38x improvement) via:
 - Inline 2-point fast path, memoized bounds/grid/renderer map
 
 ## What's Been Tried This Session
-(baseline pending)
+
+### Implemented
+1. **measureTable WeakMap cache** — eliminates redundant computation (9x faster for cached lookups)
+2. **React.memo on all kanren components** — TableNode, EdgeRenderer, ConnectorDot with custom comparators that skip callback comparison
+3. **Memoized NodeWrapper** — wraps each node in Canvas with comparator checking id/x/y/data/isSelected/isDragging
+4. **useMemo for edge routes** — routes don't recompute on selection/hover/drag-state changes
+5. **Incremental edge routing** — tracks node positions per frame, only reroutes edges connected to moved nodes
+6. **Canvas React.memo** — top-level memoization
+
+### Key Findings
+- Pure JS computation for 200 tables is **0.13ms** — negligible
+- The real bottleneck is **React reconciliation** of ~5000 SVG elements
+- During drag, the critical path is: node move → new nodes array → edge routes for connected edges → React reconcile changed nodes
+- With all optimizations: during drag of 1 node in 200 tables, only ~3 edges reroute (was 300), and only 1 NodeWrapper re-renders (was 200)
