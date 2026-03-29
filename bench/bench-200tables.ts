@@ -1,19 +1,15 @@
 /**
  * Performance benchmark simulating 200-table database diagram.
- * Tests the full useSolmu computation pipeline including:
- * - measureTable calls per node
- * - Edge route calculation with obstacle avoidance
- * - Connector computation
- * - Full render-cycle data preparation
- *
- * This simulates what happens every frame in the kanren app.
+ * Tests NODE RENDERING overhead only (no routing).
+ * 
+ * Measures what happens per frame:
+ * - measureTable() calls (called multiple times per node per render)
+ * - computeConnectors() calls
+ * - useSolmu node data preparation (createNodeProps, connectorProps, transform strings)
+ * - Simulated "did anything change" checks
  */
 
-import { calculateRoute, getNodeBounds, createSpatialGrid } from "../src/routing";
-import type { Point, NodeBounds, InternalRoutingConfig } from "../src/routing";
-import type { SolmuNode, Edge, Connector } from "../src/types";
-
-// --- Table generation (mimics kanren/src/utils/graph.ts) ---
+// --- Inline types & constants from kanren/src ---
 
 const LINE_HEIGHT = 3.5;
 const CHAR_WIDTH = 1.3;
@@ -28,12 +24,21 @@ interface Column {
   isPrimaryKey?: boolean;
   isForeignKey?: boolean;
   nullable?: boolean;
+  length?: number;
 }
 
 interface TableData {
   name: string;
   columns: Column[];
 }
+
+interface Connector {
+  id: string;
+  x: number;
+  y: number;
+}
+
+// --- Functions copied from kanren/src/utils/graph.ts ---
 
 function measureTable(info: TableData): { width: number; height: number } {
   const allLines = [info.name, ...info.columns.map((c) => `${c.name} ${c.type}`)];
@@ -58,8 +63,15 @@ function computeConnectors(id: string, info: TableData): Connector[] {
   ]);
 }
 
+function formatColumnType(col: Column): string {
+  if (col.length) return `${col.type}(${col.length})`;
+  return col.type;
+}
+
+// --- Generate 200 tables ---
+
 function generateTable(index: number): TableData {
-  const colCount = 3 + (index % 5); // 3-7 columns per table
+  const colCount = 3 + (index % 5); // 3–7 columns
   const columns: Column[] = [
     { name: "id", type: "UUID", isPrimaryKey: true, nullable: false },
   ];
@@ -68,81 +80,39 @@ function generateTable(index: number): TableData {
       name: `col_${c}`,
       type: c % 3 === 0 ? "VARCHAR" : c % 3 === 1 ? "INTEGER" : "TIMESTAMP",
       nullable: c % 2 === 0,
+      length: c % 3 === 0 ? 255 : undefined,
     });
   }
   return { name: `table_${index}`, columns };
 }
 
-function generate200Tables(): { nodes: SolmuNode<TableData>[]; edges: Edge[] } {
-  const nodes: SolmuNode<TableData>[] = [];
-  const edges: Edge[] = [];
-  const cols = 15; // 15x14 = 210 tables (close to 200)
-  const rows = Math.ceil(200 / cols);
+interface NodeLike {
+  id: string;
+  x: number;
+  y: number;
+  data: TableData;
+  connectors: Connector[];
+}
+
+function generate200(): NodeLike[] {
+  const cols = 15;
   const spacingX = 60;
   const spacingY = 50;
-
+  const nodes: NodeLike[] = [];
   for (let i = 0; i < 200; i++) {
     const col = i % cols;
     const row = Math.floor(i / cols);
-    const x = col * spacingX;
-    const y = row * spacingY;
-    const tableData = generateTable(i);
-    const id = tableData.name;
+    const data = generateTable(i);
+    const id = data.name;
     nodes.push({
       id,
-      x,
-      y,
-      type: "db-table",
-      connectors: computeConnectors(id, tableData),
-      data: tableData,
+      x: col * spacingX,
+      y: row * spacingY,
+      data,
+      connectors: computeConnectors(id, data),
     });
   }
-
-  // Create ~300 edges (foreign key relationships)
-  for (let i = 1; i < 200; i++) {
-    // Each table references 1-2 previous tables
-    const sourceTable = nodes[i].data!;
-    const targetIdx = Math.floor(Math.random() * i);
-    const targetTable = nodes[targetIdx].data!;
-    
-    const sourceCol = sourceTable.columns[1]; // first non-PK column
-    const targetCol = targetTable.columns[0]; // PK column
-
-    edges.push({
-      source: {
-        node: nodes[i].id,
-        connector: `${nodes[i].id}-${sourceCol.name}-right`,
-      },
-      target: {
-        node: nodes[targetIdx].id,
-        connector: `${nodes[targetIdx].id}-${targetCol.name}-left`,
-      },
-      type: "orthogonal" as const,
-      style: { stroke: "#4a5568", strokeWidth: 0.3, markerEnd: "arrow" },
-    });
-
-    // 50% chance of a second relationship
-    if (i > 2 && i % 2 === 0) {
-      const targetIdx2 = Math.floor(Math.random() * i);
-      if (targetIdx2 !== targetIdx) {
-        const targetTable2 = nodes[targetIdx2].data!;
-        const sourceCol2 = sourceTable.columns[Math.min(2, sourceTable.columns.length - 1)];
-        edges.push({
-          source: {
-            node: nodes[i].id,
-            connector: `${nodes[i].id}-${sourceCol2.name}-right`,
-          },
-          target: {
-            node: nodes[targetIdx2].id,
-            connector: `${nodes[targetIdx2].id}-${targetTable2.columns[0].name}-left`,
-          },
-          type: "orthogonal" as const,
-        });
-      }
-    }
-  }
-
-  return { nodes, edges };
+  return nodes;
 }
 
 // --- Benchmark utilities ---
@@ -153,125 +123,120 @@ function median(arr: number[]): number {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-function benchmarkFn(fn: () => void, iterations: number = 7): number {
+function bench(fn: () => void, iters = 11): number {
   for (let i = 0; i < 3; i++) fn();
-  const times: number[] = [];
-  for (let i = 0; i < iterations; i++) {
-    const start = performance.now();
+  const t: number[] = [];
+  for (let i = 0; i < iters; i++) {
+    const s = performance.now();
     fn();
-    times.push(performance.now() - start);
+    t.push(performance.now() - s);
   }
-  return median(times);
+  return median(t);
 }
 
-// --- Generate test data ---
-// Use fixed seed for reproducibility
-let _seed = 42;
-function random() {
-  _seed = (_seed * 16807) % 2147483647;
-  return (_seed - 1) / 2147483646;
-}
-// Override Math.random for deterministic edge generation
-const origRandom = Math.random;
-Math.random = random;
-const data200 = generate200Tables();
-Math.random = origRandom;
+// --- Data ---
+const nodes = generate200();
+console.log(`Generated: ${nodes.length} tables, avg ${(nodes.reduce((s, n) => s + n.data.columns.length, 0) / nodes.length).toFixed(1)} cols/table`);
 
-console.log(`Generated: ${data200.nodes.length} nodes, ${data200.edges.length} edges`);
+// ============================================================
+// Benchmark 1: measureTable called once per node (Canvas.tsx)
+// ============================================================
+const bMeasure1x = bench(() => {
+  for (const n of nodes) measureTable(n.data);
+});
 
-// --- Benchmark 1: measureTable for all nodes ---
-const measureMs = benchmarkFn(() => {
-  for (const node of data200.nodes) {
-    measureTable(node.data!);
+// ============================================================
+// Benchmark 2: measureTable called 3x per node
+//   (Canvas.tsx + TableNode + computeConnectors/rowY inside render)
+// ============================================================
+const bMeasure3x = bench(() => {
+  for (const n of nodes) {
+    measureTable(n.data);           // Canvas.tsx  – selection outline
+    measureTable(n.data);           // TableNode   – layout
+    // computeConnectors path calls measureTable + rowY (which calls measureTable again)
+    computeConnectors(n.id, n.data);
   }
 });
 
-// --- Benchmark 2: Full route computation (simulates useSolmu render) ---
-const routingConfig: InternalRoutingConfig = {
-  mode: "orthogonal",
-  margin: 5,
-  gridSize: 5,
-  cornerRadius: 0,
-  stubLength: 5,
-};
+// ============================================================
+// Benchmark 3: Per-node render data preparation
+//   (what useSolmu does for each node every frame)
+// ============================================================
+const selectedNodeIds = new Set<string>(["table_42"]);
+const dragItem: string | null = null;
 
-const nodeMap200 = new Map(data200.nodes.map(n => [n.id, n]));
+const bNodePrep = bench(() => {
+  for (const node of nodes) {
+    // --- transform string (useSolmu) ---
+    const _transform = `translate(${node.x}, ${node.y})`;
+    const _isDragging = dragItem === node.id;
+    const _isSelected = selectedNodeIds.has(node.id);
 
-const fullCycleMs = benchmarkFn(() => {
-  const nodeBoundsCache = getNodeBounds(data200.nodes, undefined, undefined);
-  const grid = createSpatialGrid(nodeBoundsCache, routingConfig.margin);
-  const nodeMap = new Map(data200.nodes.map(n => [n.id, n]));
+    // --- connectorProps array (useSolmu: createConnectorProps) ---
+    const _cpArr = node.connectors?.map((connector) => ({
+      connector,
+      node,
+      isHovered: false,
+    })) || [];
 
-  for (const edge of data200.edges) {
-    const source = nodeMap.get(edge.source.node);
-    const target = nodeMap.get(edge.target.node);
-    if (!source || !target) continue;
+    // --- Canvas.tsx: measureTable for selection outline ---
+    const dim = measureTable(node.data);
 
-    const sc = source.connectors?.find(c => c.id === edge.source.connector);
-    const tc = target.connectors?.find(c => c.id === edge.target.connector);
-    if (!sc || !tc) continue;
-
-    const start: Point = { x: source.x + sc.x, y: source.y + sc.y };
-    const end: Point = { x: target.x + tc.x, y: target.y + tc.y };
-
-    calculateRoute(start, end, nodeBoundsCache, routingConfig, sc, tc, grid);
+    // --- TableNode: measureTable + formatColumnType per column ---
+    const { width, height } = measureTable(node.data);
+    for (const col of node.data.columns) {
+      formatColumnType(col);
+    }
   }
 });
 
-// --- Benchmark 3: Single-node drag simulation ---
-// Move one node and recompute only affected edges (what SHOULD happen)
-// vs recompute ALL edges (what currently happens)
-const dragAllMs = benchmarkFn(() => {
-  // Currently: recompute ALL edge routes even when only 1 node moved
-  const nodeBoundsCache = getNodeBounds(data200.nodes, undefined, undefined);
-  const grid = createSpatialGrid(nodeBoundsCache, routingConfig.margin);
-  const nodeMap = new Map(data200.nodes.map(n => [n.id, n]));
+// ============================================================
+// Benchmark 4: Full per-frame node work (measure + prep + spread)
+// ============================================================
+const bFullNodeFrame = bench(() => {
+  // Simulate useSolmu elements.nodes
+  const renderNodes = nodes.map((node) => {
+    const connectorProps = node.connectors?.map((connector) => ({
+      connector,
+      node,
+      isHovered: false,
+    })) || [];
 
-  for (const edge of data200.edges) {
-    const source = nodeMap.get(edge.source.node);
-    const target = nodeMap.get(edge.target.node);
-    if (!source || !target) continue;
+    return {
+      ...node,
+      transform: `translate(${node.x}, ${node.y})`,
+      isDragging: dragItem === node.id,
+      isSelected: selectedNodeIds.has(node.id),
+      connectorProps,
+    };
+  });
 
-    const sc = source.connectors?.find(c => c.id === edge.source.connector);
-    const tc = target.connectors?.find(c => c.id === edge.target.connector);
-    if (!sc || !tc) continue;
-
-    const start: Point = { x: source.x + sc.x, y: source.y + sc.y };
-    const end: Point = { x: target.x + tc.x, y: target.y + tc.y };
-
-    calculateRoute(start, end, nodeBoundsCache, routingConfig, sc, tc, grid);
-  }
-
-  // Plus: measureTable for every node (Canvas.tsx does this)
-  for (const node of data200.nodes) {
-    measureTable(node.data!);
-  }
-
-  // Plus: computeSegments simulation
-  // Plus: create render objects for every node/edge
-});
-
-// --- Benchmark 4: measureTable is called TWICE per node per render ---
-// (once in Canvas.tsx for selection outline, once in TableNode)
-const doubleMeasureMs = benchmarkFn(() => {
-  for (const node of data200.nodes) {
-    measureTable(node.data!); // Canvas.tsx
-    measureTable(node.data!); // TableNode.tsx
+  // Simulate Canvas.tsx rendering
+  for (const rn of renderNodes) {
+    // Canvas.tsx: measureTable for selection outline
+    const dim = measureTable(rn.data);
+    // TableNode: measureTable for layout
+    const { width, height } = measureTable(rn.data);
+    // TableNode: formatColumnType per column
+    for (const col of rn.data.columns) {
+      formatColumnType(col);
+    }
   }
 });
 
-// --- Benchmark 5: computeConnectors ---
-const connectorsMs = benchmarkFn(() => {
-  for (const node of data200.nodes) {
-    computeConnectors(node.id, node.data!);
-  }
+// ============================================================
+// Benchmark 5: computeConnectors for all nodes
+//   (happens when table schema changes)
+// ============================================================
+const bConnectors = bench(() => {
+  for (const n of nodes) computeConnectors(n.id, n.data);
 });
 
-const totalMs = fullCycleMs + doubleMeasureMs;
+const totalMs = bFullNodeFrame;
 
 console.log(`METRIC total_ms=${totalMs.toFixed(2)}`);
-console.log(`METRIC full_cycle_ms=${fullCycleMs.toFixed(2)}`);
-console.log(`METRIC measure_ms=${measureMs.toFixed(2)}`);
-console.log(`METRIC double_measure_ms=${doubleMeasureMs.toFixed(2)}`);
-console.log(`METRIC drag_all_ms=${dragAllMs.toFixed(2)}`);
-console.log(`METRIC connectors_ms=${connectorsMs.toFixed(2)}`);
+console.log(`METRIC measure_1x_ms=${bMeasure1x.toFixed(2)}`);
+console.log(`METRIC measure_3x_ms=${bMeasure3x.toFixed(2)}`);
+console.log(`METRIC node_prep_ms=${bNodePrep.toFixed(2)}`);
+console.log(`METRIC full_node_frame_ms=${bFullNodeFrame.toFixed(2)}`);
+console.log(`METRIC connectors_ms=${bConnectors.toFixed(2)}`);
