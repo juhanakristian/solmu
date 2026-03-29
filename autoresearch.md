@@ -1,72 +1,53 @@
-# Autoresearch: Solmu Graph Performance
+# Autoresearch: 200-Table React Rendering Performance
 
 ## Objective
-Optimize the core computation in Solmu's graph library so it remains performant with high node/edge counts. Focus on the hot path in `useSolmu`: edge routing (A* pathfinding), node lookups, obstacle filtering, grid dot generation, and per-render data processing.
+Optimize Solmu + kanren so that 200 database tables can be displayed and interacted with (dragging nodes, panning) without lag. Focus on both the core computation pipeline AND React rendering overhead.
 
 ## Metrics
-- **Primary**: `total_ms` (ms, lower is better) — sum of full render cycle times for small (100 nodes), medium (400 nodes), and large (900 nodes) graphs
-- **Secondary**: `cycle_large_ms`, `cycle_medium_ms`, `cycle_small_ms`, `route_large_ms`, `lookup_large_ms`, `grid_dots_ms`, `bounds_large_ms`
+- **Primary**: `total_ms` (ms, lower is better) — full render cycle + double measureTable (what happens per frame)
+- **Secondary**: `full_cycle_ms` (routing+bounds), `measure_ms`, `double_measure_ms`, `drag_all_ms`, `connectors_ms`
 
 ## How to Run
 `./autoresearch.sh` — outputs `METRIC name=number` lines.
 
 ## Files in Scope
-- `src/routing.ts` — A* pathfinding, path simplification, SVG path generation. Main bottleneck.
-- `src/solmu.tsx` — `useSolmu` hook: node lookups, edge route computation, segment computation.
-- `src/viewport.ts` — `SolmuViewport` class: grid dot generation, coordinate transforms.
-- `src/types.ts` — Type definitions (modify sparingly).
-- `bench/bench.ts` — Benchmark script.
+- `src/routing.ts` — A* pathfinding, spatial grid, obstacle avoidance
+- `src/solmu.tsx` — `useSolmu` hook: edge routing, node processing
+- `src/viewport.ts` — grid dot generation
+- `src/types.ts` — types
+- `src/components.tsx` — default renderers
+- `kanren/src/components/Canvas.tsx` — renders all nodes/edges (calls measureTable per node)
+- `kanren/src/components/TableNode.tsx` — renders each table (calls measureTable again)
+- `kanren/src/components/EdgeRenderer.tsx` — renders edges
+- `kanren/src/components/ConnectorDot.tsx` — renders connector dots
+- `kanren/src/utils/graph.ts` — measureTable, computeConnectors, layout constants
+- `kanren/src/App.tsx` — main app with useSolmu config
+- `bench/bench-200tables.ts` — benchmark
 
 ## Off Limits
-- `src/components.tsx` — React rendering components (not in hot path for this benchmark)
-- `src/keyboard.ts`, `src/clipboard.ts` — Not performance-critical
-- `demo/` — Demo app
 - Do NOT change the public API signatures
+- Do NOT add new dependencies
+- Do NOT cheat on benchmarks
 
 ## Constraints
-- TypeScript must compile (`npx tsc --noEmit --skipLibCheck`)
-- No new dependencies
-- Do not cheat on benchmarks (no caching benchmark inputs, no short-circuiting based on known inputs)
-- All optimizations must be general-purpose, not benchmark-specific
-- Public API must remain unchanged
+- TypeScript must compile
+- kanren app must build: `cd kanren && npm run build`
+- All optimizations must be general-purpose
 
 ## Known Bottlenecks (from code review)
-1. **A* open set uses array sort** — O(n log n) per iteration. Should use binary heap.
-2. **Linear node lookups** — `nodes.find()` is O(n) per call, called per edge. Should use Map.
-3. **Obstacle filtering per edge** — `nodeBoundsCache.filter()` creates new array per edge. Could use exclude set.
-4. **A* closed set key generation** — string concatenation `${x},${y}` for Set keys. Could use numeric keys.
-5. **Path simplification** — Multiple passes (snapToAxis → simplifyPath). Could be single pass.
-6. **Grid dot generation** — Creates large arrays of objects. Could be optimized.
-7. **`isBlocked`/`isPathBlocked`** — Linear scan of all obstacles for every grid cell check.
+1. **measureTable() called twice per node per render** — once in Canvas.tsx for selection outline, once in TableNode. Creates temp arrays each time.
+2. **No React.memo on any component** — TableNode, EdgeRenderer, ConnectorDot all re-render on every mouse move
+3. **useSolmu recomputes ALL edge routes every render** — even when only 1 node moved
+4. **onNodeMove creates new nodes array via .map()** — triggers full re-render
+5. **Grid dots regenerated every frame** — thousands of SVG circles
+6. **computeConnectors uses measureTable internally** — more redundant computation
+7. **useEditing() context in every TableNode** — any edit re-renders all tables
 
-## What's Been Tried
+## Previous Session Results
+Core routing was optimized from 106ms to ~2.8ms (38x improvement) via:
+- Spatial hash grid, binary heap, numeric keys, pre-expanded bounds
+- Node Map for O(1) lookups, edge adjacency index
+- Inline 2-point fast path, memoized bounds/grid/renderer map
 
-### Major wins
-1. **Spatial hash grid for obstacle lookups** — Replaced O(n) linear scan with O(1) amortized spatial grid. 106→14.6ms (7.3x). Biggest single improvement.
-2. **Node Map for O(1) lookups** — Replaced `nodes.find()` with Map in useSolmu and benchmark. 14.6→5.45ms.
-3. **Numeric hash keys** — Both spatial grid and A* switched from string to numeric keys. 5.02→4.43ms.
-4. **Inline 2-point fast path** — Skip simplify/midpoint/endpoint overhead for direct routes. 4.43→2.89ms (35%).
-
-### Minor wins
-- Binary heap for A* open set (minimal impact since most edges use direct path)
-- Generation counter in isSegmentBlocked (avoids Set GC)
-- getNodeBounds loop optimization (avoid temp arrays, Math.max spread)
-- Array.join for SVG path building (faster than string concat)
-
-### Dead ends (no improvement or regression)
-- Zero-allocation coordinate-passing (V8 can't inline functions with many params)
-- Skip A* segment check (causes invalid paths)
-- Connector pre-index map (construction cost > savings for 4 connectors)
-- Single-cell fast path in isSegmentBlocked (within noise)
-- Move direct-path check before grid snapping (V8 JIT sensitivity)
-- isLineBlocked wrapper (extra dispatch negates savings)
-
-### Current state
-- **~2.78ms total** for 100+400+900 node graphs (38x improvement from 106ms baseline)
-- ~0.83µs per edge in full cycle — approaching V8 overhead floor
-- 2500-node graph: ~5.3ms cycle
-- Breakdown for 900-node graph: grid_build=0.16ms, map=0.05ms, bounds=0.02ms, routing=1.45ms
-- All data.nodes.find() calls in useSolmu replaced with O(1) Map lookups
-- All memoizable computations (nodeMap, nodeBounds, spatialGrid, rendererMap) are properly memoized
-- Further micro-optimizations are hitting V8 JIT sensitivity (some changes regress)
-- Next big wins: incremental routing, virtualization (see ideas file)
+## What's Been Tried This Session
+(baseline pending)

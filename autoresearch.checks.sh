@@ -1,6 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-# Type check the main source files
-npx tsc --noEmit --skipLibCheck 2>&1 | tail -20
-echo "Type check passed"
+# Type check solmu
+npx tsc --noEmit 2>&1 | tail -5
+
+# Type check and build kanren
+cd kanren && npx tsc --noEmit 2>&1 | tail -5
+echo "All checks passed"

@@ -7,5 +7,5 @@ npx tsc --noEmit 2>&1 | head -5 || {
   exit 1
 }
 
-# Run benchmark (tsx for direct TS execution)
-npx tsx bench/bench.ts
+# Run 200-table benchmark (primary target)
+npx tsx bench/bench-200tables.ts
