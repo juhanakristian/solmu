@@ -63,4 +63,19 @@ Core routing was optimized from 106ms to ~2.8ms (38x improvement) via:
 - Pure JS computation for 200 tables is **0.13ms** — negligible
 - The real bottleneck is **React reconciliation** of ~5000 SVG elements
 - During drag, the critical path is: node move → new nodes array → edge routes for connected edges → React reconcile changed nodes
-- With all optimizations: during drag of 1 node in 200 tables, only ~3 edges reroute (was 300), and only 1 NodeWrapper re-renders (was 200)
+- With all optimizations: during drag of 1 node in 200 tables, only ~3 edges reroute with direct mode (was 300 with A*), and only 1 NodeWrapper re-renders (was 200)
+- EditingContext is stable during drag/pan (useMemo on provider value)
+- Grid dots, viewport helpers, and edge routes are all memoized
+
+### Summary of React optimizations
+| Component | Optimization | Impact during drag |
+|---|---|---|
+| TableNode | React.memo + custom comparator (skip callbacks) | 199/200 skip re-render |
+| NodeWrapper | React.memo + id/x/y/data/selected comparator | 199/200 skip re-render |
+| EdgeRenderer | React.memo + path/selected/id comparator | Most skip (unchanged path) |
+| ConnectorDot | React.memo + connector/isHovered comparator | ~1990/2000 skip re-render |
+| Canvas | React.memo | Stable when only nodes change |
+| Edge routes | useMemo + incremental cache | Only 2-3 edges recompute |
+| Grid dots | useMemo(viewport) | Cached during drag |
+| EditingContext | useMemo on provider value | Stable during drag/pan |
+| Viewport helpers | useMemo(viewport) | Stable during drag |
