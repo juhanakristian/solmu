@@ -242,6 +242,29 @@ const bConnectors = bench(() => {
   for (const n of nodes) computeConnectors(n.id, n.data);
 });
 
+// ============================================================
+// Benchmark 6: Drag simulation — one node changes, rebuild nodes array
+//   (simulates onNodeMove: nodes.map(n => n.id === id ? {...n, x, y} : n))
+// ============================================================
+const bDragRebuild = bench(() => {
+  const draggedId = "table_42";
+  const newNodes = nodes.map(n =>
+    n.id === draggedId ? { ...n, x: n.x + 1, y: n.y + 1 } : n
+  );
+  // Simulate useSolmu: rebuild render data for all 200 nodes
+  for (const node of newNodes) {
+    const _transform = `translate(${node.x}, ${node.y})`;
+    const _isDragging = node.id === draggedId;
+    const _isSelected = selectedNodeIds.has(node.id);
+    // connectorProps would be recreated per node
+    const _cpArr = node.connectors?.map((connector) => ({
+      connector,
+      node,
+      isHovered: false,
+    })) || [];
+  }
+});
+
 const totalMs = bFullNodeFrame;
 
 console.log(`METRIC total_ms=${totalMs.toFixed(2)}`);
@@ -250,3 +273,4 @@ console.log(`METRIC measure_3x_ms=${bMeasure3x.toFixed(2)}`);
 console.log(`METRIC node_prep_ms=${bNodePrep.toFixed(2)}`);
 console.log(`METRIC full_node_frame_ms=${bFullNodeFrame.toFixed(2)}`);
 console.log(`METRIC connectors_ms=${bConnectors.toFixed(2)}`);
+console.log(`METRIC drag_rebuild_ms=${bDragRebuild.toFixed(2)}`);
