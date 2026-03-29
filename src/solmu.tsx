@@ -759,6 +759,8 @@ export function useSolmu({
           throw new Error(`No renderer found for node type ${node.type}`);
         }
         
+        // Track which connector is hovered on this node (for memo comparators)
+        const hoveredCId = (hoverConnector && hoverConnector.node === node.id) ? hoverConnector.id : null;
         return {
           ...node,
           renderer,
@@ -767,6 +769,7 @@ export function useSolmu({
           transform: `translate(${node.x}, ${node.y})`,
           isDragging: dragItem === node.id,
           isSelected: selectedNodeIds.has(node.id),
+          _hoveredConnectorId: hoveredCId,
         };
       }),
       edges: edgeRenderData.map((erd, index) => {
