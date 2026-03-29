@@ -40,18 +40,28 @@ interface Connector {
 
 // --- Functions copied from kanren/src/utils/graph.ts ---
 
+const _measureCache = new WeakMap<TableData, { width: number; height: number }>();
+
 function measureTable(info: TableData): { width: number; height: number } {
-  const allLines = [info.name, ...info.columns.map((c) => `${c.name} ${c.type}`)];
-  const maxChars = Math.max(...allLines.map((l) => l.length));
+  const cached = _measureCache.get(info);
+  if (cached) return cached;
+
+  let maxChars = info.name.length;
+  for (let i = 0; i < info.columns.length; i++) {
+    const c = info.columns[i];
+    const len = c.name.length + 1 + c.type.length;
+    if (len > maxChars) maxChars = len;
+  }
   const width = Math.max(MIN_WIDTH, maxChars * CHAR_WIDTH + PADDING_X * 2);
   const height = HEADER_HEIGHT + info.columns.length * LINE_HEIGHT + PADDING_Y * 2;
-  return { width, height };
+  const result = { width, height };
+  _measureCache.set(info, result);
+  return result;
 }
 
 function rowY(info: TableData, rowIndex: number): number {
-  const { height } = measureTable(info);
-  const halfH = height / 2;
-  return -halfH + HEADER_HEIGHT + PADDING_Y + (rowIndex + 0.5) * LINE_HEIGHT;
+  const { height } = measureTable(info); // cached
+  return -height / 2 + HEADER_HEIGHT + PADDING_Y + (rowIndex + 0.5) * LINE_HEIGHT;
 }
 
 function computeConnectors(id: string, info: TableData): Connector[] {
