@@ -615,24 +615,77 @@ export function useSolmu({
     clearSelection();
   }, []);
 
-  // Memoize edge route computation — only recompute when node positions or edge data changes,
-  // NOT when selection/drag/hover state changes
+  // Incremental edge route computation — only recompute routes for edges
+  // whose source or target node positions changed since last render.
+  const edgeRouteCache = React.useRef<{
+    prevNodes: typeof data.nodes;
+    prevEdges: typeof data.edges;
+    prevRouting: typeof routingConfig;
+    routes: Array<{
+      id: string;
+      path: string;
+      labelPoint: Point;
+      labelAngle: number;
+      sourceLabelPoint: Point;
+      targetLabelPoint: Point;
+      resolvedWaypoints: Point[];
+      segments: EdgeSegment[];
+    }>;
+    nodePositions: Map<string, { x: number; y: number }>;
+  } | null>(null);
+
   const edgeRenderData = React.useMemo(() => {
-    return data.edges.map((edge, index) => {
-      const { path, labelPoint, labelAngle, resolvedPoints, sourceLabelPoint, targetLabelPoint } = createEdgeRoute(edge);
-      const edgeId = `${edge.source.node}-${edge.target.node}-${index}`;
-      const segments = computeSegments(resolvedPoints);
-      return {
-        id: edgeId,
-        path,
-        labelPoint,
-        labelAngle,
-        sourceLabelPoint,
-        targetLabelPoint,
-        resolvedWaypoints: resolvedPoints,
-        segments,
-      };
-    });
+    const cache = edgeRouteCache.current;
+
+    // Full recompute if edges changed, routing config changed, or first render
+    if (!cache || cache.prevEdges !== data.edges || cache.prevRouting !== routingConfig) {
+      const routes = data.edges.map((edge, index) => {
+        const { path, labelPoint, labelAngle, resolvedPoints, sourceLabelPoint, targetLabelPoint } = createEdgeRoute(edge);
+        const edgeId = `${edge.source.node}-${edge.target.node}-${index}`;
+        const segments = computeSegments(resolvedPoints);
+        return { id: edgeId, path, labelPoint, labelAngle, sourceLabelPoint, targetLabelPoint, resolvedWaypoints: resolvedPoints, segments };
+      });
+      const nodePositions = new Map<string, { x: number; y: number }>();
+      for (const n of data.nodes) nodePositions.set(n.id, { x: n.x, y: n.y });
+      edgeRouteCache.current = { prevNodes: data.nodes, prevEdges: data.edges, prevRouting: routingConfig, routes, nodePositions };
+      return routes;
+    }
+
+    // Incremental: find which nodes moved
+    if (cache.prevNodes === data.nodes) {
+      return cache.routes; // nothing changed
+    }
+
+    const movedNodeIds = new Set<string>();
+    for (const n of data.nodes) {
+      const prev = cache.nodePositions.get(n.id);
+      if (!prev || prev.x !== n.x || prev.y !== n.y) {
+        movedNodeIds.add(n.id);
+      }
+    }
+
+    if (movedNodeIds.size === 0) {
+      cache.prevNodes = data.nodes;
+      return cache.routes;
+    }
+
+    // Only recompute edges connected to moved nodes
+    const newRoutes = cache.routes.slice(); // shallow copy
+    for (let index = 0; index < data.edges.length; index++) {
+      const edge = data.edges[index];
+      if (movedNodeIds.has(edge.source.node) || movedNodeIds.has(edge.target.node)) {
+        const { path, labelPoint, labelAngle, resolvedPoints, sourceLabelPoint, targetLabelPoint } = createEdgeRoute(edge);
+        const edgeId = `${edge.source.node}-${edge.target.node}-${index}`;
+        const segments = computeSegments(resolvedPoints);
+        newRoutes[index] = { id: edgeId, path, labelPoint, labelAngle, sourceLabelPoint, targetLabelPoint, resolvedWaypoints: resolvedPoints, segments };
+      }
+    }
+
+    // Update cache
+    const nodePositions = new Map<string, { x: number; y: number }>();
+    for (const n of data.nodes) nodePositions.set(n.id, { x: n.x, y: n.y });
+    edgeRouteCache.current = { prevNodes: data.nodes, prevEdges: data.edges, prevRouting: routingConfig, routes: newRoutes, nodePositions };
+    return newRoutes;
   }, [data.nodes, data.edges, nodeBoundsCache, spatialGridRef, routingConfig]);
 
   return {
