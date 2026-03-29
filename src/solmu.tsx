@@ -615,6 +615,26 @@ export function useSolmu({
     clearSelection();
   }, []);
 
+  // Memoize edge route computation — only recompute when node positions or edge data changes,
+  // NOT when selection/drag/hover state changes
+  const edgeRenderData = React.useMemo(() => {
+    return data.edges.map((edge, index) => {
+      const { path, labelPoint, labelAngle, resolvedPoints, sourceLabelPoint, targetLabelPoint } = createEdgeRoute(edge);
+      const edgeId = `${edge.source.node}-${edge.target.node}-${index}`;
+      const segments = computeSegments(resolvedPoints);
+      return {
+        id: edgeId,
+        path,
+        labelPoint,
+        labelAngle,
+        sourceLabelPoint,
+        targetLabelPoint,
+        resolvedWaypoints: resolvedPoints,
+        segments,
+      };
+    });
+  }, [data.nodes, data.edges, nodeBoundsCache, spatialGridRef, routingConfig]);
+
   return {
     canvas: {
       props: {
@@ -658,25 +678,16 @@ export function useSolmu({
           isSelected: selectedNodeIds.has(node.id),
         };
       }),
-      edges: data.edges.map((edge, index) => {
-        const { path, labelPoint, labelAngle, resolvedPoints, sourceLabelPoint, targetLabelPoint } = createEdgeRoute(edge);
-        const edgeId = `${edge.source.node}-${edge.target.node}-${index}`;
-        const segments = computeSegments(resolvedPoints);
+      edges: edgeRenderData.map((erd, index) => {
+        const edge = data.edges[index];
         return {
           ...edge,
-          id: edgeId,
-          path,
-          labelPoint,
-          labelAngle,
-          sourceLabelPoint,
-          targetLabelPoint,
-          isSelected: selectedEdgeIds.has(edgeId),
-          onClick: (event?: React.MouseEvent) => handleEdgeClick(edgeId, event?.shiftKey),
-          resolvedWaypoints: resolvedPoints,
-          segments,
+          ...erd,
+          isSelected: selectedEdgeIds.has(erd.id),
+          onClick: (event?: React.MouseEvent) => handleEdgeClick(erd.id, event?.shiftKey),
           onSegmentDragStart: onEdgePathChange
             ? (segmentIndex: number, event: React.MouseEvent) =>
-                handleSegmentDragStart(edgeId, segmentIndex, resolvedPoints, event)
+                handleSegmentDragStart(erd.id, segmentIndex, erd.resolvedWaypoints, event)
             : undefined,
         };
       }),
