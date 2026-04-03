@@ -168,6 +168,7 @@ export type UseSolmuResult = {
   actions: {
     selectAll: () => void;
     deselectAll: () => void;
+    selectNode: (nodeId: string) => void;
   };
 };
 
@@ -231,6 +232,7 @@ export type UseSolmuParams = {
     };
   };
   onNodeMove?: NodeMoveFunc;
+  onNodeMoveEnd?: () => void;
   onConnect?: ConnectFunc;
   onNodeClick?: (nodeId: string) => void;
   onEdgeClick?: (edgeId: string) => void;

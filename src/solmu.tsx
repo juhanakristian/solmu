@@ -1,7 +1,7 @@
 import React from "react";
 import { SolmuNodeConnector, UseSolmuParams, UseSolmuResult, EdgeSegment } from "./types";
 import { SolmuViewport } from "./viewport";
-import { calculateRoute, buildPathFromWaypoints, getNodeBounds, type InternalRoutingConfig, type NodeBounds, type Point } from "./routing";
+import { calculateRoute, buildPathFromWaypoints, getNodeBounds, createSpatialGrid, type InternalRoutingConfig, type NodeBounds, type Point } from "./routing";
 
 /**
  * Compute edge segments from resolved waypoints for hit testing and dragging.
@@ -49,6 +49,7 @@ function computeSegments(resolvedPoints: Point[]): EdgeSegment[] {
 export function useSolmu({
   data,
   onNodeMove,
+  onNodeMoveEnd,
   onConnect,
   onNodeClick,
   onEdgeClick,
@@ -71,6 +72,10 @@ export function useSolmu({
     });
   }, [config.viewport]);
   const [dragItem, setDragItem] = React.useState<string | null>(null);
+  const dragItemRef = React.useRef<string | null>(null);
+  dragItemRef.current = dragItem;
+  // Offset from mouse to node origin at drag start, so the node doesn't jump
+  const [dragOffset, setDragOffset] = React.useState<Point>({ x: 0, y: 0 });
 
   // Multi-selection state
   const [selectedNodeIds, setSelectedNodeIds] = React.useState<Set<string>>(new Set());
@@ -109,12 +114,25 @@ export function useSolmu({
   } | null>(null);
 
   function onMouseDown(event: React.MouseEvent, id: string) {
+    // Compute offset from mouse to node origin so the node doesn't jump
+    const node = nodeMap.get(id);
+    const worldPoint = eventToWorld(event);
+    if (node && worldPoint) {
+      setDragOffset({ x: node.x - worldPoint.x, y: node.y - worldPoint.y });
+    }
     setDragItem(id);
     handleNodeClick(id, event.shiftKey);
   }
 
   function onMouseUp(_event: React.MouseEvent) {
-    if (dragItem) setDragItem(null);
+    if (dragItem) {
+      setDragItem(null);
+      // Invalidate edge route cache so full A* routing recalculates on next render
+      if (edgeRouteCache.current) {
+        edgeRouteCache.current.prevNodes = null as any;
+      }
+      if (onNodeMoveEnd) onNodeMoveEnd();
+    }
     if (dragSegment) setDragSegment(null);
     // Finish marquee selection
     if (marquee) {
@@ -133,15 +151,6 @@ export function useSolmu({
         clearSelection();
       }
       setMarquee(null);
-    }
-    if (dragConnector) {
-      if (hoverConnector && onConnect) {
-        onConnect(
-          { node: dragConnector.node, connector: dragConnector.id },
-          { node: hoverConnector.node, connector: hoverConnector.id }
-        );
-      }
-      setDragConnector(null);
     }
   }
 
@@ -162,12 +171,14 @@ export function useSolmu({
 
   function onMouseMove(event: React.MouseEvent) {
     if (dragItem && onNodeMove) {
-      const node = data.nodes.find((n) => n.id === dragItem);
+      const node = nodeMap.get(dragItem);
       if (!node) return;
 
       const worldPoint = eventToWorld(event);
       if (worldPoint) {
-        const snapped = viewport.snapToGrid(worldPoint);
+        // Apply drag offset so the node doesn't jump to the cursor
+        const target = { x: worldPoint.x + dragOffset.x, y: worldPoint.y + dragOffset.y };
+        const snapped = viewport.snapToGrid(target);
         const deltaX = snapped.x - node.x;
         const deltaY = snapped.y - node.y;
 
@@ -178,26 +189,31 @@ export function useSolmu({
         if (selectedNodeIds.has(dragItem) && selectedNodeIds.size > 1) {
           for (const selectedId of selectedNodeIds) {
             if (selectedId === dragItem) continue;
-            const selectedNode = data.nodes.find((n) => n.id === selectedId);
+            const selectedNode = nodeMap.get(selectedId);
             if (selectedNode) {
               onNodeMove(selectedId, selectedNode.x + deltaX, selectedNode.y + deltaY);
             }
           }
         }
 
-        // Clear waypoints on all edges connected to any moved node
+        // Clear waypoints on edges connected to moved nodes (using adjacency index)
         if (onEdgePathChange) {
           const movedNodeIds = selectedNodeIds.has(dragItem) && selectedNodeIds.size > 1
             ? selectedNodeIds
             : new Set([dragItem]);
-          data.edges.forEach((edge, index) => {
-            if (edge.waypoints && edge.waypoints.length > 0) {
-              if (movedNodeIds.has(edge.source.node) || movedNodeIds.has(edge.target.node)) {
+          const seen = new Set<number>();
+          for (const nodeId of movedNodeIds) {
+            const connected = edgesByNode.get(nodeId);
+            if (!connected) continue;
+            for (const { edge, index } of connected) {
+              if (seen.has(index)) continue;
+              seen.add(index);
+              if (edge.waypoints && edge.waypoints.length > 0) {
                 const edgeId = `${edge.source.node}-${edge.target.node}-${index}`;
                 onEdgePathChange(edgeId, []);
               }
             }
-          });
+          }
         }
       }
     }
@@ -264,7 +280,7 @@ export function useSolmu({
     }
 
     if (dragConnector) {
-      const sourceNode = data.nodes.find((n) => n.id === dragConnector.node);
+      const sourceNode = nodeMap.get(dragConnector.node);
       if (sourceNode) {
         const sourceConnector = sourceNode.connectors?.find(
           (c) => c.id === dragConnector.id
@@ -438,16 +454,60 @@ export function useSolmu({
     stubLength: config.routing?.stubLength ?? 0,
   };
 
-  // Get node bounds for obstacle avoidance
-  const nodeBoundsCache = config.routing?.avoidNodes === false
-    ? []
-    : getNodeBounds(data.nodes, undefined, config.routing?.nodeDimensions);
+  // Build renderer map for O(1) type lookups
+  const rendererMap = React.useMemo(() => {
+    const map = new Map<string, React.FC<any>>();
+    for (const r of config.renderers) {
+      map.set(r.type, r.component);
+    }
+    return map;
+  }, [config.renderers]);
+
+  // Build node map for O(1) lookups
+  const nodeMap = React.useMemo(() => {
+    const map = new Map<string, typeof data.nodes[0]>();
+    for (const node of data.nodes) {
+      map.set(node.id, node);
+    }
+    return map;
+  }, [data.nodes]);
+
+  // Build edge adjacency index: node id -> list of (edge, index) for connected edges
+  const edgesByNode = React.useMemo(() => {
+    const map = new Map<string, Array<{ edge: typeof data.edges[0]; index: number }>>();
+    for (let i = 0; i < data.edges.length; i++) {
+      const edge = data.edges[i];
+      const srcId = edge.source.node;
+      const tgtId = edge.target.node;
+      let srcList = map.get(srcId);
+      if (!srcList) { srcList = []; map.set(srcId, srcList); }
+      srcList.push({ edge, index: i });
+      if (srcId !== tgtId) {
+        let tgtList = map.get(tgtId);
+        if (!tgtList) { tgtList = []; map.set(tgtId, tgtList); }
+        tgtList.push({ edge, index: i });
+      }
+    }
+    return map;
+  }, [data.edges]);
+
+  // Get node bounds for obstacle avoidance (memoized)
+  const nodeBoundsCache = React.useMemo(() => {
+    if (config.routing?.avoidNodes === false) return [];
+    return getNodeBounds(data.nodes, undefined, config.routing?.nodeDimensions);
+  }, [data.nodes, config.routing?.avoidNodes, config.routing?.nodeDimensions]);
+
+  // Build spatial grid once for all edges (memoized, depends on nodeBoundsCache)
+  const spatialGridRef = React.useMemo(() => {
+    if (nodeBoundsCache.length === 0) return undefined;
+    return createSpatialGrid(nodeBoundsCache, routingConfig.margin);
+  }, [nodeBoundsCache, routingConfig.margin]);
 
   const createEdgeRoute = (edge: typeof data.edges[0]) => {
     const fallback = { path: "", labelPoint: { x: 0, y: 0 }, labelAngle: 0, resolvedPoints: [] as Point[], sourceLabelPoint: { x: 0, y: 0 }, targetLabelPoint: { x: 0, y: 0 } };
 
-    const source = data.nodes.find((n) => n.id === edge.source.node);
-    const target = data.nodes.find((n) => n.id === edge.target.node);
+    const source = nodeMap.get(edge.source.node);
+    const target = nodeMap.get(edge.target.node);
     if (!source || !target) return fallback;
 
     const sc = source.connectors?.find((c) => c.id === edge.source.connector);
@@ -502,12 +562,9 @@ export function useSolmu({
       );
     }
 
-    // Filter out source and target nodes from obstacles
-    const obstacles = nodeBoundsCache.filter(
-      (ob) => ob.id !== source.id && ob.id !== target.id
-    );
-
-    return calculateRoute(start, end, obstacles, { ...routingConfig, mode }, sc, tc);
+    // Avoid object spread per edge — reuse config when mode matches
+    const edgeConfig = mode === routingConfig.mode ? routingConfig : { ...routingConfig, mode };
+    return calculateRoute(start, end, nodeBoundsCache, edgeConfig, sc, tc, spatialGridRef);
   };
 
   // Handle segment drag start — captures initial state for drag calculations
@@ -568,6 +625,122 @@ export function useSolmu({
     clearSelection();
   }, []);
 
+  // Select a specific node — called externally (e.g., after creating a new table)
+  const selectNode = React.useCallback((nodeId: string) => {
+    const newNodeIds = new Set([nodeId]);
+    const newEdgeIds = new Set<string>();
+    setSelectedNodeIds(newNodeIds);
+    setSelectedEdgeIds(newEdgeIds);
+    notifySelectionChange(newNodeIds, newEdgeIds);
+  }, []);
+
+  // Incremental edge route computation — only recompute routes for edges
+  // whose source or target node positions changed since last render.
+  const edgeRouteCache = React.useRef<{
+    prevNodes: typeof data.nodes;
+    prevEdges: typeof data.edges;
+    prevRouting: typeof routingConfig;
+    routes: Array<{
+      id: string;
+      path: string;
+      labelPoint: Point;
+      labelAngle: number;
+      sourceLabelPoint: Point;
+      targetLabelPoint: Point;
+      resolvedWaypoints: Point[];
+      segments: EdgeSegment[];
+    }>;
+    nodePositions: Map<string, { x: number; y: number }>;
+  } | null>(null);
+
+  const edgeRenderData = React.useMemo(() => {
+    const cache = edgeRouteCache.current;
+
+    // Full recompute if edges changed, routing config changed, or first render
+    if (!cache || cache.prevEdges !== data.edges || cache.prevRouting !== routingConfig) {
+      const routes = data.edges.map((edge, index) => {
+        const { path, labelPoint, labelAngle, resolvedPoints, sourceLabelPoint, targetLabelPoint } = createEdgeRoute(edge);
+        const edgeId = `${edge.source.node}-${edge.target.node}-${index}`;
+        const segments = computeSegments(resolvedPoints);
+        return { id: edgeId, path, labelPoint, labelAngle, sourceLabelPoint, targetLabelPoint, resolvedWaypoints: resolvedPoints, segments };
+      });
+      const nodePositions = new Map<string, { x: number; y: number }>();
+      for (const n of data.nodes) nodePositions.set(n.id, { x: n.x, y: n.y });
+      edgeRouteCache.current = { prevNodes: data.nodes, prevEdges: data.edges, prevRouting: routingConfig, routes, nodePositions };
+      return routes;
+    }
+
+    // Incremental: find which nodes moved
+    if (cache.prevNodes === data.nodes) {
+      return cache.routes; // nothing changed
+    }
+
+    const movedNodeIds = new Set<string>();
+    for (const n of data.nodes) {
+      const prev = cache.nodePositions.get(n.id);
+      if (!prev || prev.x !== n.x || prev.y !== n.y) {
+        movedNodeIds.add(n.id);
+      }
+    }
+
+    if (movedNodeIds.size === 0) {
+      cache.prevNodes = data.nodes;
+      return cache.routes;
+    }
+
+    // Only recompute edges connected to moved nodes.
+    // During active drag, use direct routing (skip A* obstacle avoidance) for speed.
+    const newRoutes = cache.routes.slice(); // shallow copy
+    const isDragging = dragItemRef.current !== null;
+    for (let index = 0; index < data.edges.length; index++) {
+      const edge = data.edges[index];
+      if (movedNodeIds.has(edge.source.node) || movedNodeIds.has(edge.target.node)) {
+        if (isDragging) {
+          // Fast path during drag: direct routing (no A*)
+          const source = nodeMap.get(edge.source.node);
+          const target = nodeMap.get(edge.target.node);
+          if (source && target) {
+            const sc = source.connectors?.find((c) => c.id === edge.source.connector);
+            const tc = target.connectors?.find((c) => c.id === edge.target.connector);
+            if (sc && tc) {
+              const start = { x: source.x + sc.x, y: source.y + sc.y };
+              const end = { x: target.x + tc.x, y: target.y + tc.y };
+              const directResult = calculateRoute(start, end, [], { ...routingConfig, mode: 'direct' }, sc, tc);
+              const edgeId = `${edge.source.node}-${edge.target.node}-${index}`;
+              newRoutes[index] = { id: edgeId, ...directResult, resolvedWaypoints: directResult.resolvedPoints, segments: computeSegments(directResult.resolvedPoints) };
+            }
+          }
+        } else {
+          const { path, labelPoint, labelAngle, resolvedPoints, sourceLabelPoint, targetLabelPoint } = createEdgeRoute(edge);
+          const edgeId = `${edge.source.node}-${edge.target.node}-${index}`;
+          const segments = computeSegments(resolvedPoints);
+          newRoutes[index] = { id: edgeId, path, labelPoint, labelAngle, sourceLabelPoint, targetLabelPoint, resolvedWaypoints: resolvedPoints, segments };
+        }
+      }
+    }
+
+    // Update cache
+    const nodePositions = new Map<string, { x: number; y: number }>();
+    for (const n of data.nodes) nodePositions.set(n.id, { x: n.x, y: n.y });
+    edgeRouteCache.current = { prevNodes: data.nodes, prevEdges: data.edges, prevRouting: routingConfig, routes: newRoutes, nodePositions };
+    return newRoutes;
+  }, [data.nodes, data.edges, nodeBoundsCache, spatialGridRef, routingConfig]);
+
+  // Memoize grid dots — only regenerate when viewport config changes
+  const gridDots = React.useMemo(
+    () => viewport.generateGridDots(),
+    [viewport]
+  );
+
+  // Memoize viewport helpers — stable closures over viewport instance
+  const viewportHelpers = React.useMemo(() => ({
+    screenToWorld: (x: number, y: number) => viewport.screenToWorld(x, y),
+    worldToScreen: (x: number, y: number) => viewport.worldToScreen(x, y),
+    snapToGrid: (point: { x: number; y: number }) => viewport.snapToGrid(point),
+    formatCoordinate: (value: number) => viewport.formatCoordinate(value),
+    getEffectiveGridSize: () => viewport.getEffectiveGridSize(),
+  }), [viewport]);
+
   return {
     canvas: {
       props: {
@@ -585,22 +758,18 @@ export function useSolmu({
       width: viewport.getConfig().width,
       height: viewport.getConfig().height,
       viewBox: viewport.getViewBox(),
-      gridDots: viewport.generateGridDots(),
-      viewport: {
-        screenToWorld: (x: number, y: number) => viewport.screenToWorld(x, y),
-        worldToScreen: (x: number, y: number) => viewport.worldToScreen(x, y),
-        snapToGrid: (point: { x: number; y: number }) => viewport.snapToGrid(point),
-        formatCoordinate: (value: number) => viewport.formatCoordinate(value),
-        getEffectiveGridSize: () => viewport.getEffectiveGridSize(),
-      },
+      gridDots: gridDots,
+      viewport: viewportHelpers,
     },
     elements: {
       nodes: data.nodes.map((node) => {
-        const renderer = config.renderers.find((r) => r.type === node.type)?.component;
+        const renderer = rendererMap.get(node.type);
         if (!renderer) {
           throw new Error(`No renderer found for node type ${node.type}`);
         }
         
+        // Track which connector is hovered on this node (for memo comparators)
+        const hoveredCId = (hoverConnector && hoverConnector.node === node.id) ? hoverConnector.id : null;
         return {
           ...node,
           renderer,
@@ -609,27 +778,19 @@ export function useSolmu({
           transform: `translate(${node.x}, ${node.y})`,
           isDragging: dragItem === node.id,
           isSelected: selectedNodeIds.has(node.id),
+          _hoveredConnectorId: hoveredCId,
         };
       }),
-      edges: data.edges.map((edge, index) => {
-        const { path, labelPoint, labelAngle, resolvedPoints, sourceLabelPoint, targetLabelPoint } = createEdgeRoute(edge);
-        const edgeId = `${edge.source.node}-${edge.target.node}-${index}`;
-        const segments = computeSegments(resolvedPoints);
+      edges: edgeRenderData.map((erd, index) => {
+        const edge = data.edges[index];
         return {
           ...edge,
-          id: edgeId,
-          path,
-          labelPoint,
-          labelAngle,
-          sourceLabelPoint,
-          targetLabelPoint,
-          isSelected: selectedEdgeIds.has(edgeId),
-          onClick: (event?: React.MouseEvent) => handleEdgeClick(edgeId, event?.shiftKey),
-          resolvedWaypoints: resolvedPoints,
-          segments,
+          ...erd,
+          isSelected: selectedEdgeIds.has(erd.id),
+          onClick: (event?: React.MouseEvent) => handleEdgeClick(erd.id, event?.shiftKey),
           onSegmentDragStart: onEdgePathChange
             ? (segmentIndex: number, event: React.MouseEvent) =>
-                handleSegmentDragStart(edgeId, segmentIndex, resolvedPoints, event)
+                handleSegmentDragStart(erd.id, segmentIndex, erd.resolvedWaypoints, event)
             : undefined,
         };
       }),
@@ -661,6 +822,7 @@ export function useSolmu({
     actions: {
       selectAll,
       deselectAll,
+      selectNode,
     },
   };
 }

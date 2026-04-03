@@ -1,5 +1,5 @@
 import React from "react";
-import { useSolmu, useSolmuKeyboard, duplicateSelection, copyToSystemClipboard, pasteFromSystemClipboard, DefaultEdgeRenderer, SolmuMarkerDefs } from "../../../src";
+import { useSolmu, useSolmuKeyboard, useSolmuViewport, duplicateSelection, copyToSystemClipboard, pasteFromSystemClipboard, DefaultEdgeRenderer, SolmuMarkerDefs } from "../../../src";
 
 import type { Edge } from "../../../src/types";
 
@@ -357,11 +357,9 @@ function DbConnectorRenderer({ connector, isHovered, onMouseDown, onMouseOver, o
 }
 
 export default function DatabaseDiagramApp() {
-  const [viewportConfig, setViewportConfig] = React.useState({
+  const { viewportConfig, containerProps, isPanning } = useSolmuViewport({
     origin: 'top-left' as const,
     units: 'mm' as const,
-    width: window.innerWidth,
-    height: window.innerHeight,
     worldBounds: { x: -200, y: -200, width: 400, height: 400 },
     zoom: 1,
     pan: { x: 0, y: 0 },
@@ -578,76 +576,7 @@ export default function DatabaseDiagramApp() {
     },
   });
 
-  // Zoom and pan
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    setViewportConfig((prev) => ({
-      ...prev,
-      zoom: Math.max(0.1, Math.min(10, prev.zoom * zoomFactor)),
-    }));
-  };
-
-  const [isPanning, setIsPanning] = React.useState(false);
-  const [lastPanPos, setLastPanPos] = React.useState({ x: 0, y: 0 });
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 1 || (e.button === 0 && e.ctrlKey)) {
-      e.preventDefault();
-      setIsPanning(true);
-      setLastPanPos({ x: e.clientX, y: e.clientY });
-    }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (isPanning) {
-      e.preventDefault();
-      const deltaX = e.clientX - lastPanPos.x;
-      const deltaY = e.clientY - lastPanPos.y;
-
-      const normalizedDeltaX = deltaX / viewportConfig.width / viewportConfig.zoom;
-      const normalizedDeltaY = deltaY / viewportConfig.height / viewportConfig.zoom;
-
-      setViewportConfig((prev) => ({
-        ...prev,
-        pan: {
-          x: prev.pan.x - normalizedDeltaX,
-          y: prev.pan.y - normalizedDeltaY,
-        },
-      }));
-
-      setLastPanPos({ x: e.clientX, y: e.clientY });
-    }
-  };
-
-  const handleMouseUp = () => {
-    setIsPanning(false);
-  };
-
-  React.useEffect(() => {
-    const handleGlobalMouseUp = () => setIsPanning(false);
-    if (isPanning) {
-      document.addEventListener('mouseup', handleGlobalMouseUp);
-      document.addEventListener('mouseleave', handleGlobalMouseUp);
-      return () => {
-        document.removeEventListener('mouseup', handleGlobalMouseUp);
-        document.removeEventListener('mouseleave', handleGlobalMouseUp);
-      };
-    }
-  }, [isPanning]);
-
-  React.useEffect(() => {
-    const handleResize = () => {
-      setViewportConfig((prev) => ({
-        ...prev,
-        width: window.innerWidth,
-        height: window.innerHeight,
-      }));
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  // Zoom & pan handled by useSolmuViewport (containerProps)
 
   // Relationship cardinality labels
   type CardinalityLabel = {
@@ -689,7 +618,8 @@ export default function DatabaseDiagramApp() {
         <div style={{ color: '#2d3748', fontWeight: 600, marginBottom: 4, fontSize: 13 }}>Database Diagram</div>
         <div style={{ fontSize: 11, color: '#718096' }}>Zoom: {viewportConfig.zoom.toFixed(1)}x</div>
         <hr style={{ margin: '8px 0', borderColor: '#e2e8f0', borderStyle: 'solid' }} />
-        <div style={{ fontSize: 11, color: '#a0aec0' }}>Scroll: Zoom</div>
+        <div style={{ fontSize: 11, color: '#a0aec0' }}>Scroll/Two-finger: Pan</div>
+        <div style={{ fontSize: 11, color: '#a0aec0' }}>Pinch/Ctrl+Scroll: Zoom</div>
         <div style={{ fontSize: 11, color: '#a0aec0' }}>Middle/Ctrl+Drag: Pan</div>
         <div style={{ fontSize: 11, color: '#a0aec0' }}>Drag tables to move</div>
         <div style={{ fontSize: 11, color: '#a0aec0' }}>Drag between connectors to link</div>
@@ -705,10 +635,7 @@ export default function DatabaseDiagramApp() {
       {/* Canvas */}
       <div
         style={{ width: "100%", height: "100%", overflow: "hidden" }}
-        onWheel={handleWheel}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
+        {...containerProps}
       >
         <DatabaseCanvas
           canvas={canvas}

@@ -5,6 +5,10 @@ export { useSolmu, SolmuCanvas, DefaultConnectorRenderer, DefaultEdgeRenderer, S
 export * from "./types";
 export * from "./viewport";
 
+// Viewport utilities
+export { useSolmuViewport } from "./useViewport";
+export type { ViewportState, UseSolmuViewportOptions } from "./useViewport";
+
 // Keyboard utilities
 export { useSolmuKeyboard } from "./keyboard";
 export type { KeyBinding, UseSolmuKeyboardParams } from "./keyboard";
@@ -18,6 +22,6 @@ export {
 export type { ClipboardData, PasteResult, DuplicateOptions } from "./clipboard";
 
 // Export routing utilities
-export { calculateRoute, getNodeBounds, calculateSimpleOrthogonalRoute, buildPathFromWaypoints } from "./routing";
+export { calculateRoute, getNodeBounds, calculateSimpleOrthogonalRoute, buildPathFromWaypoints, createSpatialGrid } from "./routing";
 export type { Point, Rectangle, NodeBounds, RoutingMode, RouteResult } from "./routing";
 
