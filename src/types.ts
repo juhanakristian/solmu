@@ -168,6 +168,7 @@ export type UseSolmuResult = {
   actions: {
     selectAll: () => void;
     deselectAll: () => void;
+    selectNode: (nodeId: string) => void;
   };
 };
 

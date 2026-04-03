@@ -625,6 +625,15 @@ export function useSolmu({
     clearSelection();
   }, []);
 
+  // Select a specific node — called externally (e.g., after creating a new table)
+  const selectNode = React.useCallback((nodeId: string) => {
+    const newNodeIds = new Set([nodeId]);
+    const newEdgeIds = new Set<string>();
+    setSelectedNodeIds(newNodeIds);
+    setSelectedEdgeIds(newEdgeIds);
+    notifySelectionChange(newNodeIds, newEdgeIds);
+  }, []);
+
   // Incremental edge route computation — only recompute routes for edges
   // whose source or target node positions changed since last render.
   const edgeRouteCache = React.useRef<{
@@ -813,6 +822,7 @@ export function useSolmu({
     actions: {
       selectAll,
       deselectAll,
+      selectNode,
     },
   };
 }
