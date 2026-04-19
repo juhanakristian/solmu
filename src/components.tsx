@@ -1,5 +1,5 @@
 import React from "react";
-import type { SolmuCanvas as SolmuCanvasData, SolmuElements, ConnectorRendererProps, EdgeRendererProps, SolmuRenderEdge } from "./types";
+import type { SolmuCanvas as SolmuCanvasData, SolmuElements, SolmuInteractions, ConnectorRendererProps, EdgeRendererProps, SolmuRenderEdge } from "./types";
 
 const BUILTIN_MARKER_IDS = {
   "arrow": "solmu-arrow",
@@ -111,12 +111,13 @@ export function DefaultEdgeRenderer({ edge }: EdgeRendererProps) {
   );
 }
 
-export function DefaultConnectorRenderer({ connector, node, isHovered, onMouseDown, onMouseOver, onMouseUp, onMouseOut }: ConnectorRendererProps) {
+/** Default connector renderer — SVG rect at the connector's absolute world position */
+export function DefaultConnectorRenderer({ worldX, worldY, isHovered, onMouseDown, onMouseOver, onMouseUp, onMouseOut }: ConnectorRendererProps) {
   const size = 2;
   return (
     <rect
-      x={connector.x - size / 2}
-      y={connector.y - size / 2}
+      x={worldX - size / 2}
+      y={worldY - size / 2}
       width={size}
       height={size}
       rx={3}
@@ -135,98 +136,128 @@ export function DefaultConnectorRenderer({ connector, node, isHovered, onMouseDo
   );
 }
 
-export interface SolmuCanvasProps extends React.SVGProps<SVGSVGElement> {
+export interface SolmuCanvasProps extends React.HTMLProps<HTMLDivElement> {
   canvas: SolmuCanvasData;
   elements: SolmuElements;
+  interactions: SolmuInteractions;
   connectorRenderer?: React.FC<ConnectorRendererProps>;
   edgeRenderer?: React.FC<EdgeRendererProps>;
+  /** Children are rendered inside the SVG layer (for custom SVG overlays, text labels, etc.) */
   children?: React.ReactNode;
 }
 
 export function SolmuCanvas({
   canvas,
   elements,
+  interactions,
   connectorRenderer: ConnectorRenderer = DefaultConnectorRenderer,
   edgeRenderer: EdgeRenderer = DefaultEdgeRenderer,
   children,
   style,
-  ...svgProps
+  onMouseMove: externalOnMouseMove,
+  onMouseUp: externalOnMouseUp,
+  onMouseDown: externalOnMouseDown,
+  ...divProps
 }: SolmuCanvasProps) {
   return (
-    <svg
-      {...canvas.props}
-      {...svgProps}
-      viewBox={canvas.viewBox}
+    <div
+      ref={canvas.ref}
+      {...divProps}
       style={{
-        background: "#0d1117",
+        position: "relative",
         width: "100%",
         height: "100%",
+        background: "#0d1117",
         userSelect: "none",
+        overflow: "hidden",
         ...style,
       }}
+      onMouseMove={(e) => { interactions.onMouseMove(e); externalOnMouseMove?.(e as any); }}
+      onMouseUp={(e) => { interactions.onMouseUp(e); externalOnMouseUp?.(e as any); }}
     >
-      <SolmuMarkerDefs edges={elements.edges} />
+      {/* SVG layer: grid, edges, connectors, drag line, marquee */}
+      <svg
+        viewBox={canvas.viewBox}
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+        onMouseDown={(e) => { interactions.onMouseDown(e); externalOnMouseDown?.(e as any); }}
+      >
+        <SolmuMarkerDefs edges={elements.edges} />
 
-      {/* Render grid dots */}
-      {canvas.gridDots && canvas.gridDots.map((dot, index) => (
-        <circle
-          key={`grid-dot-${index}`}
-          cx={dot.x}
-          cy={dot.y}
-          r={dot.size}
-          fill="#2a3a5c"
-          opacity={dot.opacity}
-        />
-      ))}
+        {/* Grid dots */}
+        {canvas.gridDots && canvas.gridDots.map((dot, index) => (
+          <circle
+            key={`grid-dot-${index}`}
+            cx={dot.x}
+            cy={dot.y}
+            r={dot.size}
+            fill="#2a3a5c"
+            opacity={dot.opacity}
+          />
+        ))}
 
-      {/* Render edges */}
-      {elements.edges.map((edge) => (
-        <EdgeRenderer key={edge.id} edge={edge} />
-      ))}
+        {/* Edges */}
+        {elements.edges.map((edge) => (
+          <EdgeRenderer key={edge.id} edge={edge} />
+        ))}
 
-      {/* Render nodes */}
-      {elements.nodes.map((node) => {
-        const NodeComponent = node.renderer;
-        return (
-          <g key={node.id} transform={node.transform}>
-            <g transform={node.rotation ? `rotate(${node.rotation})` : undefined}>
+        {/* Connectors at absolute world positions */}
+        {elements.nodes.map((node) =>
+          node.connectorProps.map((cp) => (
+            <ConnectorRenderer key={`${node.id}-${cp.connector.id}`} {...cp} />
+          ))
+        )}
+
+        {/* Drag line */}
+        {elements.dragLine?.isVisible && (
+          <path
+            d={elements.dragLine.path}
+            stroke="#64ffda"
+            strokeWidth="0.4"
+            fill="none"
+          />
+        )}
+
+        {/* Marquee selection rectangle */}
+        {elements.marquee && (
+          <rect
+            x={elements.marquee.x}
+            y={elements.marquee.y}
+            width={elements.marquee.width}
+            height={elements.marquee.height}
+            fill="rgba(100, 149, 237, 0.15)"
+            stroke="#6495ed"
+            strokeWidth={0.3}
+            strokeDasharray="2 1"
+            pointerEvents="none"
+          />
+        )}
+
+        {/* Custom SVG children (text labels, overlays, etc.) */}
+        {children}
+      </svg>
+
+      {/* HTML node layer */}
+      <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+        {elements.nodes.map((node) => {
+          const NodeComponent = node.renderer;
+          return (
+            <div
+              key={node.id}
+              style={{
+                position: "absolute",
+                left: 0,
+                top: 0,
+                transform: `translate(${node.screenX}px, ${node.screenY}px) translate(-50%, -50%)${node.rotation ? ` rotate(${node.rotation}deg)` : ""}`,
+                pointerEvents: "auto",
+                outline: node.isSelected ? "2px dashed rgba(100,149,237,0.8)" : undefined,
+                outlineOffset: "2px",
+              }}
+            >
               <NodeComponent {...node.nodeProps} />
-            </g>
-            {/* Connectors stay unrotated — their positions are pre-rotated in data */}
-            {node.connectorProps.map((cp) => (
-              <ConnectorRenderer key={cp.connector.id} {...cp} />
-            ))}
-          </g>
-        );
-      })}
-
-      {/* Render drag line */}
-      {elements.dragLine?.isVisible && (
-        <path
-          d={elements.dragLine.path}
-          stroke="#64ffda"
-          strokeWidth="0.4"
-          fill="none"
-        />
-      )}
-
-      {/* Marquee selection rectangle */}
-      {elements.marquee && (
-        <rect
-          x={elements.marquee.x}
-          y={elements.marquee.y}
-          width={elements.marquee.width}
-          height={elements.marquee.height}
-          fill="rgba(100, 149, 237, 0.15)"
-          stroke="#6495ed"
-          strokeWidth={0.3}
-          strokeDasharray="2 1"
-          pointerEvents="none"
-        />
-      )}
-
-      {/* Custom children */}
-      {children}
-    </svg>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

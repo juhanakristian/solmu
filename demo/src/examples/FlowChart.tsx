@@ -1,5 +1,5 @@
 import React from "react";
-import { useSolmu, useSolmuKeyboard, useSolmuViewport, DefaultConnectorRenderer } from "../../../src";
+import { useSolmu, useSolmuKeyboard, useSolmuViewport, SolmuCanvas } from "../../../src";
 import type { Edge } from "../../../src/types";
 
 // --- Flowchart shape renderers ---
@@ -16,75 +16,85 @@ const COLORS = {
   ioStroke: "#6a1b9a",
 };
 
+const NODE_STYLE: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "grab",
+  userSelect: "none",
+  fontSize: 9,
+  fontFamily: "sans-serif",
+  textAlign: "center",
+  lineHeight: 1.3,
+};
+
 // Start / End (rounded rectangle)
-function Terminal({ node, ...props }: any) {
-  const w = 28;
-  const h = 10;
+function Terminal({ node, onMouseDown, onMouseUp }: any) {
+  const label = NODE_LABELS[node.id] || node.id;
   return (
-    <g {...props}>
-      <rect x={-w / 2} y={-h / 2} width={w} height={h} fill="transparent" />
-      <rect
-        x={-w / 2} y={-h / 2} width={w} height={h}
-        rx={5} ry={5}
-        fill={COLORS.terminal}
-        stroke={COLORS.terminalStroke}
-        strokeWidth={0.3}
-      />
-    </g>
+    <div
+      onMouseDown={onMouseDown} onMouseUp={onMouseUp}
+      style={{ ...NODE_STYLE, width: 56, height: 20, background: COLORS.terminal, border: `0.5px solid ${COLORS.terminalStroke}`, borderRadius: 10, color: COLORS.text }}
+    >
+      {label}
+    </div>
   );
 }
 
 // Process (rectangle)
-function Process({ node, ...props }: any) {
-  const w = 32;
-  const h = 12;
+function Process({ node, onMouseDown, onMouseUp }: any) {
+  const label = NODE_LABELS[node.id] || node.id;
   return (
-    <g {...props}>
-      <rect x={-w / 2} y={-h / 2} width={w} height={h} fill="transparent" />
-      <rect
-        x={-w / 2} y={-h / 2} width={w} height={h}
-        rx={1} ry={1}
-        fill={COLORS.fill}
-        stroke={COLORS.stroke}
-        strokeWidth={0.3}
-      />
-    </g>
+    <div
+      onMouseDown={onMouseDown} onMouseUp={onMouseUp}
+      style={{ ...NODE_STYLE, width: 64, height: 24, background: COLORS.fill, border: `0.5px solid ${COLORS.stroke}`, borderRadius: 2, color: COLORS.text, whiteSpace: "pre-line" }}
+    >
+      {label}
+    </div>
   );
 }
 
-// Decision (diamond)
-function Decision({ node, ...props }: any) {
-  const s = 10; // half-size
+// Decision (diamond) — inline SVG with label overlay
+function Decision({ node, onMouseDown, onMouseUp }: any) {
+  const s = 20; // pixels (= 10 world units at default zoom)
+  const label = NODE_LABELS[node.id] || node.id;
   return (
-    <g {...props}>
-      <rect x={-s} y={-s} width={s * 2} height={s * 2} fill="transparent" />
-      <path
-        d={`M 0 ${-s} L ${s} 0 L 0 ${s} L ${-s} 0 Z`}
-        fill={COLORS.decision}
-        stroke={COLORS.decisionStroke}
-        strokeWidth={0.3}
-        strokeLinejoin="round"
-      />
-    </g>
+    <div onMouseDown={onMouseDown} onMouseUp={onMouseUp} style={{ position: "relative", width: s * 2, height: s * 2, cursor: "grab" }}>
+      <svg width={s * 2} height={s * 2} style={{ position: "absolute", top: 0, left: 0 }}>
+        <path
+          d={`M ${s} 0 L ${s * 2} ${s} L ${s} ${s * 2} L 0 ${s} Z`}
+          fill={COLORS.decision}
+          stroke={COLORS.decisionStroke}
+          strokeWidth={0.5}
+          strokeLinejoin="round"
+        />
+      </svg>
+      <div style={{ ...NODE_STYLE, position: "absolute", inset: 0, fontSize: 8, color: COLORS.text }}>
+        {label}
+      </div>
+    </div>
   );
 }
 
-// I/O (parallelogram)
-function IOBlock({ node, ...props }: any) {
-  const w = 30;
-  const h = 10;
-  const skew = 4;
+// I/O (parallelogram) — inline SVG with label overlay
+function IOBlock({ node, onMouseDown, onMouseUp }: any) {
+  const w = 60; const h = 20; const skew = 8;
+  const label = NODE_LABELS[node.id] || node.id;
   return (
-    <g {...props}>
-      <rect x={-w / 2 - skew} y={-h / 2} width={w + skew * 2} height={h} fill="transparent" />
-      <path
-        d={`M ${-w / 2 + skew} ${-h / 2} L ${w / 2 + skew} ${-h / 2} L ${w / 2 - skew} ${h / 2} L ${-w / 2 - skew} ${h / 2} Z`}
-        fill={COLORS.io}
-        stroke={COLORS.ioStroke}
-        strokeWidth={0.3}
-        strokeLinejoin="round"
-      />
-    </g>
+    <div onMouseDown={onMouseDown} onMouseUp={onMouseUp} style={{ position: "relative", width: w, height: h, cursor: "grab" }}>
+      <svg width={w} height={h} style={{ position: "absolute", top: 0, left: 0 }}>
+        <path
+          d={`M ${skew} 0 L ${w} 0 L ${w - skew} ${h} L 0 ${h} Z`}
+          fill={COLORS.io}
+          stroke={COLORS.ioStroke}
+          strokeWidth={0.5}
+          strokeLinejoin="round"
+        />
+      </svg>
+      <div style={{ ...NODE_STYLE, position: "absolute", inset: 0, color: COLORS.text }}>
+        {label}
+      </div>
+    </div>
   );
 }
 
@@ -138,156 +148,38 @@ function connectors(id: string, type: string) {
   }
 }
 
-// --- Flowchart canvas (custom render with labels) ---
-
-function FlowChartCanvas({
-  canvas,
-  elements,
-  style,
-  edgeLabels,
-}: {
-  canvas: any;
-  elements: any;
-  style?: React.CSSProperties;
-  edgeLabels: (string | null)[];
-}) {
+// Edge labels rendered as SVG children inside SolmuCanvas
+function FlowEdgeLabels({ edges, edgeLabels }: { edges: any[]; edgeLabels: (string | null)[] }) {
   return (
-    <svg
-      {...canvas.props}
-      viewBox={canvas.viewBox}
-      style={{
-        background: "#fafbfc",
-        width: "100%",
-        height: "100%",
-        userSelect: "none",
-        ...style,
-      }}
-    >
-      {/* Grid dots */}
-      {canvas.gridDots?.map((dot: any, i: number) => (
-        <circle
-          key={`grid-${i}`}
-          cx={dot.x} cy={dot.y} r={dot.size}
-          fill="#ddd" opacity={dot.opacity}
-        />
-      ))}
-
-      {/* Edges with draggable segment hit areas */}
-      {elements.edges.map((edge: any) => (
-        <g key={edge.id}>
-          <path
-            d={edge.path}
-            fill="none"
-            stroke={edge.isSelected ? "#1565c0" : "#546e7a"}
-            strokeWidth={edge.isSelected ? 0.5 : 0.3}
-            onClick={(e: React.MouseEvent) => {
-              e.stopPropagation();
-              edge.onClick?.();
-            }}
-            style={{ cursor: "pointer" }}
-          />
-          {/* Invisible hit areas for draggable segments */}
-          {edge.segments?.filter((s: any) => s.draggable).map((segment: any) => (
-            <line
-              key={`seg-${segment.index}`}
-              x1={segment.p1.x}
-              y1={segment.p1.y}
-              x2={segment.p2.x}
-              y2={segment.p2.y}
-              stroke="transparent"
-              strokeWidth={3}
-              style={{
-                cursor: segment.orientation === "horizontal" ? "ns-resize" : "ew-resize",
-              }}
-              onMouseDown={(e: React.MouseEvent) => {
-                e.stopPropagation();
-                edge.onSegmentDragStart?.(segment.index, e);
-              }}
-            />
-          ))}
-        </g>
-      ))}
-
-      {/* Edge labels (Yes/No) */}
-      {elements.edges.map((edge: any, i: number) => {
+    <>
+      {edges.map((edge: any, i: number) => {
         const label = edgeLabels[i];
         if (!label) return null;
         return (
           <g key={`elabel-${edge.id}`}>
             <rect
               x={edge.labelPoint.x - 4} y={edge.labelPoint.y - 2}
-              width={8} height={4}
-              rx={1} ry={1}
-              fill="#fff"
-              stroke="none"
-              opacity={0.85}
+              width={8} height={4} rx={1} ry={1}
+              fill="#fff" opacity={0.85}
             />
             <text
               x={edge.labelPoint.x} y={edge.labelPoint.y + 0.5}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              fill="#546e7a"
-              fontSize={2.2}
-              fontFamily="sans-serif"
-              fontStyle="italic"
+              textAnchor="middle" dominantBaseline="middle"
+              fill="#546e7a" fontSize={2.2} fontFamily="sans-serif" fontStyle="italic"
             >
               {label}
             </text>
           </g>
         );
       })}
-
-      {/* Nodes with labels */}
-      {elements.nodes.map((node: any) => {
-        const NodeComponent = node.renderer;
-        const label = NODE_LABELS[node.id] || node.id;
-        const lines = label.split("\n");
-        return (
-          <g key={node.id} transform={node.transform}>
-            <g transform={node.rotation ? `rotate(${node.rotation})` : undefined}>
-              <NodeComponent {...node.nodeProps} />
-              {/* Node label */}
-              {lines.map((line: string, i: number) => (
-                <text
-                  key={`label-${i}`}
-                  x={0}
-                  y={(i - (lines.length - 1) / 2) * 3.2 + 0.5}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fill={COLORS.text}
-                  fontSize={2.4}
-                  fontFamily="sans-serif"
-                  pointerEvents="none"
-                >
-                  {line}
-                </text>
-              ))}
-            </g>
-            {node.connectorProps.map((cp: any) => (
-              <DefaultConnectorRenderer key={cp.connector.id} {...cp} />
-            ))}
-          </g>
-        );
-      })}
-
-      {/* Drag line */}
-      {elements.dragLine?.isVisible && (
-        <path
-          d={elements.dragLine.path}
-          stroke="#546e7a"
-          strokeWidth="0.3"
-          strokeDasharray="1 1"
-          fill="none"
-        />
-      )}
-    </svg>
+    </>
   );
 }
 
 // --- Main App ---
 
 export default function FlowChartApp() {
-  const { viewportConfig, containerProps, isPanning } = useSolmuViewport({
+  const { viewportConfig, containerRef, containerProps, isPanning } = useSolmuViewport({
     origin: 'top-left' as const,
     units: 'mm' as const,
     worldBounds: { x: -200, y: -200, width: 400, height: 400 },
@@ -415,9 +307,10 @@ export default function FlowChartApp() {
     },
   };
 
-  const { canvas, elements, selection, actions } = useSolmu({
+  const { canvas, elements, interactions, selection, actions } = useSolmu({
     data,
     config,
+    containerRef,
     onNodeMove,
     onConnect,
     onEdgePathChange,
@@ -468,21 +361,16 @@ export default function FlowChartApp() {
       </div>
 
       {/* Canvas */}
-      <div
-        style={{ width: "100%", height: "100%", overflow: "hidden" }}
-        {...containerProps}
+      <SolmuCanvas
+        canvas={canvas}
+        elements={elements}
+        interactions={interactions}
+        style={{ background: "#fafbfc", cursor: isPanning ? 'grabbing' : 'default' }}
+        onMouseDown={containerProps.onMouseDown}
+        onMouseMove={containerProps.onMouseMove}
       >
-        <FlowChartCanvas
-          canvas={canvas}
-          elements={elements}
-          edgeLabels={edgeLabels}
-          style={{
-            cursor: isPanning ? 'grabbing' : 'default',
-            width: "100%",
-            height: "100%",
-          }}
-        />
-      </div>
+        <FlowEdgeLabels edges={elements.edges} edgeLabels={edgeLabels} />
+      </SolmuCanvas>
     </div>
   );
 }
