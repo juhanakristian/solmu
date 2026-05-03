@@ -74,6 +74,24 @@ export function useSolmu({
   const internalContainerRef = React.useRef<HTMLDivElement>(null);
   const containerRef = externalContainerRef ?? internalContainerRef;
 
+  // Keep latest values in refs so stable callbacks always see fresh data
+  const dataRef = React.useRef(data);
+  dataRef.current = data;
+  const viewportRef = React.useRef(viewport);
+  viewportRef.current = viewport;
+  const containerRefRef = React.useRef(containerRef);
+  containerRefRef.current = containerRef;
+  const onNodeMoveRef = React.useRef(onNodeMove);
+  onNodeMoveRef.current = onNodeMove;
+  const onConnectRef = React.useRef(onConnect);
+  onConnectRef.current = onConnect;
+  const onNodeClickRef = React.useRef(onNodeClick);
+  onNodeClickRef.current = onNodeClick;
+  const onEdgeClickRef = React.useRef(onEdgeClick);
+  onEdgeClickRef.current = onEdgeClick;
+  const onEdgePathChangeRef = React.useRef(onEdgePathChange);
+  onEdgePathChangeRef.current = onEdgePathChange;
+
   const [dragItem, setDragItem] = React.useState<string | null>(null);
   const dragItemRef = React.useRef<string | null>(null);
   // Offset from mouse to node origin at drag start — stored as ref for immediate access
@@ -189,10 +207,14 @@ export function useSolmu({
   }
 
   // Convert a mouse event to world coordinates using the container's bounding rect.
+  // Reads from refs so it always uses the latest viewport / container —
+  // required for memoized node/edge callbacks that close over stale closures.
   function eventToWorld(event: React.MouseEvent): Point | null {
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return null;
-    return viewport.screenToWorld(event.clientX - rect.left, event.clientY - rect.top);
+    const ref = containerRefRef.current;
+    const el = ref.current;
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    return viewportRef.current.screenToWorld(event.clientX - rect.left, event.clientY - rect.top);
   }
 
   function onMouseMove(event: React.MouseEvent) {
