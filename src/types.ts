@@ -70,11 +70,16 @@ export type NodeMoveFunc = (node: string, x: number, y: number) => void;
 
 // New simplified API types
 export type SolmuCanvas = {
+  /** Ref to attach to the root container div (used for coordinate conversion) */
+  ref: React.RefObject<HTMLDivElement>;
+  /** Props for the root SVG element (onMouseDown for marquee/pan) */
   props: React.SVGProps<SVGSVGElement>;
   width: number;
   height: number;
   viewBox: string;
   gridDots?: Array<{ x: number; y: number; size: number; opacity: number }>;
+  /** CSS matrix transform for the HTML node layer — apply as `transform` on the layer wrapper */
+  htmlLayerTransform: string;
   viewport?: {
     screenToWorld: (x: number, y: number) => { x: number; y: number };
     worldToScreen: (x: number, y: number) => { x: number; y: number };
@@ -87,6 +92,10 @@ export type SolmuCanvas = {
 export type ConnectorRendererProps = {
   connector: Connector;
   node: SolmuNode<any>;
+  /** Absolute world-space X position of this connector (node.x + connector.x) */
+  worldX: number;
+  /** Absolute world-space Y position of this connector (node.y + connector.y) */
+  worldY: number;
   isHovered: boolean;
   onMouseDown: () => void;
   onMouseOver: () => void;
@@ -95,7 +104,10 @@ export type ConnectorRendererProps = {
 };
 
 export type SolmuRenderNode<TData = unknown> = SolmuNode<TData> & {
-  transform: string;
+  /** Screen pixel X position of this node's center */
+  screenX: number;
+  /** Screen pixel Y position of this node's center */
+  screenY: number;
   isSelected?: boolean;
   isDragging?: boolean;
   renderer: React.FC<NodeRendererProps<any>>;
@@ -191,6 +203,8 @@ export type UseSolmuParams = {
     nodes: SolmuNode<any>[];
     edges: Edge[];
   };
+  /** Optional ref to share with useSolmuViewport — if provided, canvas.ref will equal this ref */
+  containerRef?: React.RefObject<HTMLDivElement>;
   config: {
     renderers: NodeRenderer[];
     viewport?: {

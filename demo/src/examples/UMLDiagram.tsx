@@ -1,5 +1,5 @@
 import React from "react";
-import { useSolmu, useSolmuKeyboard, useSolmuViewport, SolmuCanvas, DefaultConnectorRenderer, SolmuMarkerDefs, DefaultEdgeRenderer } from "../../../src";
+import { useSolmu, useSolmuKeyboard, useSolmuViewport, SolmuCanvas } from "../../../src";
 import type { Edge } from "../../../src/types";
 
 // --- UML Class Box Renderer ---
@@ -84,203 +84,95 @@ const CLASS_DATA: Record<string, ClassInfo> = {
   },
 };
 
-// Layout constants (in mm, world coords)
-const LINE_HEIGHT = 3.2;
-const CHAR_WIDTH = 1.4;
-const PADDING_X = 2;
-const PADDING_Y = 1.5;
-const MIN_WIDTH = 30;
+// Layout constants in world units (CSS px inside the matrix layer = world units).
+const UML_FONT = 5;
+const UML_LINE = 7;       // line-height per row
+const UML_PAD_V = 3;      // top+bottom padding per section
+const UML_PAD_H = 4;      // left+right padding
 
-function measureClass(info: ClassInfo) {
-  const allLines = [info.name, ...info.attributes, ...info.methods];
-  if (info.stereotype) allLines.push(`«${info.stereotype}»`);
-  const maxChars = Math.max(...allLines.map((l) => l.length));
-  const width = Math.max(MIN_WIDTH, maxChars * CHAR_WIDTH + PADDING_X * 2);
+// Height of a section with n rows (min 1 to avoid zero-height sections)
+const sectionH = (n: number) => 2 * UML_PAD_V + Math.max(n, 1) * UML_LINE;
+const headerH = (hasStereotype: boolean) => 2 * UML_PAD_V + (hasStereotype ? 2 : 1) * UML_LINE;
 
-  const headerLines = info.stereotype ? 2 : 1;
-  const headerH = headerLines * LINE_HEIGHT + PADDING_Y * 2;
-  const attrH = info.attributes.length > 0
-    ? info.attributes.length * LINE_HEIGHT + PADDING_Y * 2
-    : PADDING_Y * 2;
-  const methodH = info.methods.length > 0
-    ? info.methods.length * LINE_HEIGHT + PADDING_Y * 2
-    : PADDING_Y * 2;
-  const height = headerH + attrH + methodH;
-
-  return { width, height, headerH, attrH, methodH };
-}
-
-function UMLClassBox({ node, ...props }: any) {
+function UMLClassBox({ node, onMouseDown, onMouseUp }: any) {
   const info = CLASS_DATA[node.id];
   if (!info) {
-    return <rect {...props} width={20} height={10} fill="#fff" stroke="#333" />;
+    return (
+      <div
+        onMouseDown={onMouseDown} onMouseUp={onMouseUp}
+        style={{ width: 60, fontSize: UML_FONT, border: "0.3px solid #5d4037", background: "#fffde7", cursor: "grab", padding: `${UML_PAD_V}px ${UML_PAD_H}px` }}
+      >
+        {node.id}
+      </div>
+    );
   }
 
-  const { width, height, headerH, attrH } = measureClass(info);
-  const halfW = width / 2;
-  const halfH = height / 2;
-
-  const headerLines = info.stereotype ? 2 : 1;
-
   return (
-    <g {...props}>
-      {/* Hit area */}
-      <rect x={-halfW} y={-halfH} width={width} height={height} fill="transparent" />
-
-      {/* Background */}
-      <rect
-        x={-halfW}
-        y={-halfH}
-        width={width}
-        height={height}
-        fill="#fffde7"
-        stroke="#5d4037"
-        strokeWidth={0.3}
-        rx={0.5}
-        ry={0.5}
-      />
-
-      {/* Header section */}
-      {info.stereotype && (
-        <text
-          x={0}
-          y={-halfH + PADDING_Y + LINE_HEIGHT * 0.75}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill="#8d6e63"
-          fontSize={2}
-          fontFamily="sans-serif"
-          fontStyle="italic"
-        >
-          {`\u00AB${info.stereotype}\u00BB`}
-        </text>
-      )}
-      <text
-        x={0}
-        y={-halfH + PADDING_Y + (headerLines - 0.25) * LINE_HEIGHT}
-        textAnchor="middle"
-        dominantBaseline="middle"
-        fill="#3e2723"
-        fontSize={2.5}
-        fontWeight="bold"
-        fontFamily="sans-serif"
-      >
-        {info.name}
-      </text>
-
-      {/* Divider after header */}
-      <line
-        x1={-halfW} y1={-halfH + headerH}
-        x2={halfW} y2={-halfH + headerH}
-        stroke="#5d4037" strokeWidth={0.3}
-      />
-
+    <div onMouseDown={onMouseDown} onMouseUp={onMouseUp} style={{
+      background: "#fffde7",
+      border: "0.3px solid #5d4037",
+      borderRadius: 1,
+      fontFamily: "sans-serif",
+      fontSize: UML_FONT,
+      color: "#4e342e",
+      cursor: "grab",
+      userSelect: "none",
+      whiteSpace: "nowrap",
+      boxSizing: "border-box",
+    }}>
+      {/* Header */}
+      <div style={{
+        height: headerH(!!info.stereotype),
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        paddingLeft: UML_PAD_H,
+        paddingRight: UML_PAD_H,
+        borderBottom: "0.3px solid #5d4037",
+        boxSizing: "border-box",
+      }}>
+        {info.stereotype && (
+          <div style={{ lineHeight: `${UML_LINE}px`, fontSize: UML_FONT * 0.9, color: "#8d6e63", fontStyle: "italic" }}>
+            {`\u00AB${info.stereotype}\u00BB`}
+          </div>
+        )}
+        <div style={{ lineHeight: `${UML_LINE}px`, fontWeight: "bold", color: "#3e2723" }}>{info.name}</div>
+      </div>
       {/* Attributes */}
-      {info.attributes.map((attr, i) => (
-        <text
-          key={`attr-${i}`}
-          x={-halfW + PADDING_X}
-          y={-halfH + headerH + PADDING_Y + (i + 0.6) * LINE_HEIGHT}
-          fill="#4e342e"
-          fontSize={2}
-          fontFamily="monospace"
-        >
-          {attr}
-        </text>
-      ))}
-
-      {/* Divider after attributes */}
-      <line
-        x1={-halfW} y1={-halfH + headerH + attrH}
-        x2={halfW} y2={-halfH + headerH + attrH}
-        stroke="#5d4037" strokeWidth={0.3}
-      />
-
+      <div style={{
+        height: sectionH(info.attributes.length),
+        paddingTop: UML_PAD_V,
+        paddingBottom: UML_PAD_V,
+        paddingLeft: UML_PAD_H,
+        paddingRight: UML_PAD_H,
+        borderBottom: "0.3px solid #5d4037",
+        boxSizing: "border-box",
+      }}>
+        {info.attributes.length > 0
+          ? info.attributes.map((attr, i) => (
+              <div key={i} style={{ lineHeight: `${UML_LINE}px`, fontFamily: "monospace" }}>{attr}</div>
+            ))
+          : <div style={{ height: UML_LINE }} />
+        }
+      </div>
       {/* Methods */}
-      {info.methods.map((method, i) => (
-        <text
-          key={`method-${i}`}
-          x={-halfW + PADDING_X}
-          y={-halfH + headerH + attrH + PADDING_Y + (i + 0.6) * LINE_HEIGHT}
-          fill="#4e342e"
-          fontSize={2}
-          fontFamily="monospace"
-        >
-          {method}
-        </text>
-      ))}
-    </g>
-  );
-}
-
-function UMLCanvas({
-  canvas,
-  elements,
-  style,
-  children,
-}: {
-  canvas: any;
-  elements: any;
-  style?: React.CSSProperties;
-  children?: React.ReactNode;
-}) {
-  return (
-    <svg
-      {...canvas.props}
-      viewBox={canvas.viewBox}
-      style={{
-        background: "#fafafa",
-        width: "100%",
-        height: "100%",
-        userSelect: "none",
-        ...style,
-      }}
-    >
-      <SolmuMarkerDefs edges={elements.edges} />
-
-      {/* Grid dots */}
-      {canvas.gridDots?.map((dot: any, i: number) => (
-        <circle
-          key={`grid-${i}`}
-          cx={dot.x} cy={dot.y} r={dot.size}
-          fill="#ccc" opacity={dot.opacity}
-        />
-      ))}
-
-      {/* Edges */}
-      {elements.edges.map((edge: any) => (
-        <DefaultEdgeRenderer key={edge.id} edge={edge} />
-      ))}
-
-      {/* Nodes */}
-      {elements.nodes.map((node: any) => {
-        const NodeComponent = node.renderer;
-        return (
-          <g key={node.id} transform={node.transform}>
-            <g transform={node.rotation ? `rotate(${node.rotation})` : undefined}>
-              <NodeComponent {...node.nodeProps} />
-            </g>
-            {node.connectorProps.map((cp: any) => (
-              <DefaultConnectorRenderer key={cp.connector.id} {...cp} />
-            ))}
-          </g>
-        );
-      })}
-
-      {/* Drag line */}
-      {elements.dragLine?.isVisible && (
-        <path
-          d={elements.dragLine.path}
-          stroke="#5d4037"
-          strokeWidth="0.3"
-          strokeDasharray="1 1"
-          fill="none"
-        />
-      )}
-
-      {/* Relationship labels rendered as children */}
-      {children}
-    </svg>
+      <div style={{
+        height: sectionH(info.methods.length),
+        paddingTop: UML_PAD_V,
+        paddingBottom: UML_PAD_V,
+        paddingLeft: UML_PAD_H,
+        paddingRight: UML_PAD_H,
+        boxSizing: "border-box",
+      }}>
+        {info.methods.length > 0
+          ? info.methods.map((method, i) => (
+              <div key={i} style={{ lineHeight: `${UML_LINE}px`, fontFamily: "monospace" }}>{method}</div>
+            ))
+          : <div style={{ height: UML_LINE }} />
+        }
+      </div>
+    </div>
   );
 }
 
@@ -297,27 +189,41 @@ type RelationshipLabel = {
 
 // --- Main App ---
 
+// Class box connector positions — computed from the same constants used in UMLClassBox
+// so connectors sit exactly on the visual border at any zoom.
+// halfH = (headerH + attrsH + methodsH) / 2, halfW fixed wide enough for longest text.
+const CLASS_BOX_DIMS: Record<string, { halfW: number; halfH: number }> = {
+  // User: header=13, attrs(4)=34, methods(2)=20 → total=67
+  User:          { halfW: 46, halfH: 34 },
+  // Order: header=13, attrs(3)=27, methods(3)=27 → total=67
+  Order:         { halfW: 46, halfH: 34 },
+  // OrderItem: header=13, attrs(2)=20, methods(1)=13 → total=46
+  OrderItem:     { halfW: 46, halfH: 23 },
+  // Product: header=13, attrs(4)=34, methods(1)=13 → total=60
+  Product:       { halfW: 40, halfH: 30 },
+  // PaymentMethod (stereotype): header=20, attrs(0)=13, methods(2)=20 → total=53
+  PaymentMethod: { halfW: 46, halfH: 27 },
+  // CreditCard: header=13, attrs(2)=20, methods(2)=20 → total=53
+  CreditCard:    { halfW: 40, halfH: 27 },
+};
+
 function computeConnectors(id: string) {
-  const info = CLASS_DATA[id];
-  if (!info) return [];
-  const { width, height } = measureClass(info);
-  const halfW = width / 2;
-  const halfH = height / 2;
+  const dims = CLASS_BOX_DIMS[id] ?? { halfW: 18, halfH: 14 };
   return [
-    { id: `${id}-top`, x: 0, y: -halfH },
-    { id: `${id}-bottom`, x: 0, y: halfH },
-    { id: `${id}-left`, x: -halfW, y: 0 },
-    { id: `${id}-right`, x: halfW, y: 0 },
+    { id: `${id}-top`,    x: 0,          y: -dims.halfH },
+    { id: `${id}-bottom`, x: 0,          y:  dims.halfH },
+    { id: `${id}-left`,   x: -dims.halfW, y: 0 },
+    { id: `${id}-right`,  x:  dims.halfW, y: 0 },
   ];
 }
 
 export default function UMLDiagramApp() {
   const [mousePos, setMousePos] = React.useState({ x: 0, y: 0 });
 
-  const { viewportConfig, containerProps, isPanning } = useSolmuViewport({
+  const { viewportConfig, containerRef, containerProps, isPanning } = useSolmuViewport({
     origin: 'top-left' as const,
     units: 'mm' as const,
-    worldBounds: { x: -200, y: -200, width: 400, height: 400 },
+    worldBounds: { x: -250, y: -200, width: 600, height: 500 },
     zoom: 1,
     pan: { x: 0, y: 0 },
     grid: {
@@ -329,12 +235,12 @@ export default function UMLDiagramApp() {
 
   const [data, setData] = React.useState({
     nodes: [
-      { id: "User", x: -60, y: -50, type: "uml-class", connectors: computeConnectors("User") },
-      { id: "Order", x: 20, y: -50, type: "uml-class", connectors: computeConnectors("Order") },
-      { id: "OrderItem", x: 20, y: 20, type: "uml-class", connectors: computeConnectors("OrderItem") },
-      { id: "Product", x: -60, y: 20, type: "uml-class", connectors: computeConnectors("Product") },
-      { id: "PaymentMethod", x: 90, y: -50, type: "uml-class", connectors: computeConnectors("PaymentMethod") },
-      { id: "CreditCard", x: 90, y: 20, type: "uml-class", connectors: computeConnectors("CreditCard") },
+      { id: "User", x: -120, y: -90, type: "uml-class", connectors: computeConnectors("User") },
+      { id: "Order", x: 30, y: -90, type: "uml-class", connectors: computeConnectors("Order") },
+      { id: "OrderItem", x: 30, y: 50, type: "uml-class", connectors: computeConnectors("OrderItem") },
+      { id: "Product", x: -120, y: 50, type: "uml-class", connectors: computeConnectors("Product") },
+      { id: "PaymentMethod", x: 180, y: -90, type: "uml-class", connectors: computeConnectors("PaymentMethod") },
+      { id: "CreditCard", x: 180, y: 50, type: "uml-class", connectors: computeConnectors("CreditCard") },
     ],
     edges: [
       // User 1---* Order (association)
@@ -436,9 +342,10 @@ export default function UMLDiagramApp() {
     },
   };
 
-  const { canvas, elements, selection, actions } = useSolmu({
+  const { canvas, elements, interactions, selection, actions } = useSolmu({
     data,
     config,
+    containerRef,
     onNodeMove,
     onConnect,
     onEdgePathChange,
@@ -494,68 +401,42 @@ export default function UMLDiagramApp() {
       </div>
 
       {/* Canvas */}
-      <div
-        style={{ width: "100%", height: "100%", overflow: "hidden" }}
-        {...containerProps}
+      <SolmuCanvas
+        canvas={canvas}
+        elements={elements}
+        interactions={interactions}
+        style={{ background: "#fafafa", cursor: isPanning ? 'grabbing' : 'default' }}
+        onMouseDown={containerProps.onMouseDown}
+        onMouseMove={containerProps.onMouseMove}
       >
-        <UMLCanvas
-          canvas={canvas}
-          elements={elements}
-          style={{
-            cursor: isPanning ? 'grabbing' : 'default',
-            width: "100%",
-            height: "100%",
-          }}
-        >
-          {/* Relationship multiplicity labels */}
-          {relationshipLabels.map((rl) => {
-            // Find the corresponding edge to get its labelPoint
-            const edgeIndex = ["user-order", "order-item", "item-product", "order-payment"].indexOf(rl.id);
-            const edge = elements.edges[edgeIndex];
-            if (!edge) return null;
-            const x = edge.labelPoint.x;
-            const y = edge.labelPoint.y;
-            return (
-              <g key={rl.id}>
-                {rl.text && (
-                  <text
-                    x={x} y={y - 2}
-                    textAnchor="middle"
-                    fill="#8d6e63"
-                    fontSize={2}
-                    fontFamily="sans-serif"
-                    fontStyle="italic"
-                  >
-                    {rl.text}
-                  </text>
-                )}
-                {rl.sourceLabel && (
-                  <text
-                    x={x - 3} y={y + 2}
-                    textAnchor="middle"
-                    fill="#5d4037"
-                    fontSize={2}
-                    fontFamily="sans-serif"
-                  >
-                    {rl.sourceLabel}
-                  </text>
-                )}
-                {rl.targetLabel && (
-                  <text
-                    x={x + 3} y={y + 2}
-                    textAnchor="middle"
-                    fill="#5d4037"
-                    fontSize={2}
-                    fontFamily="sans-serif"
-                  >
-                    {rl.targetLabel}
-                  </text>
-                )}
-              </g>
-            );
-          })}
-        </UMLCanvas>
-      </div>
+        {/* Relationship multiplicity labels */}
+        {relationshipLabels.map((rl) => {
+          const edgeIndex = ["user-order", "order-item", "item-product", "order-payment"].indexOf(rl.id);
+          const edge = elements.edges[edgeIndex];
+          if (!edge) return null;
+          const x = edge.labelPoint.x;
+          const y = edge.labelPoint.y;
+          return (
+            <g key={rl.id}>
+              {rl.text && (
+                <text x={x} y={y - 2} textAnchor="middle" fill="#8d6e63" fontSize={2} fontFamily="sans-serif" fontStyle="italic">
+                  {rl.text}
+                </text>
+              )}
+              {rl.sourceLabel && (
+                <text x={x - 3} y={y + 2} textAnchor="middle" fill="#5d4037" fontSize={2} fontFamily="sans-serif">
+                  {rl.sourceLabel}
+                </text>
+              )}
+              {rl.targetLabel && (
+                <text x={x + 3} y={y + 2} textAnchor="middle" fill="#5d4037" fontSize={2} fontFamily="sans-serif">
+                  {rl.targetLabel}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </SolmuCanvas>
     </div>
   );
 }

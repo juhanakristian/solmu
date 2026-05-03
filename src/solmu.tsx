@@ -54,6 +54,7 @@ export function useSolmu({
   onEdgeClick,
   onEdgePathChange,
   onSelectionChange,
+  containerRef: externalContainerRef,
   config,
 }: UseSolmuParams): UseSolmuResult {
   // Create viewport instance with default or provided config
@@ -70,9 +71,31 @@ export function useSolmu({
       grid: viewportConfig.grid,
     });
   }, [config.viewport]);
+  const internalContainerRef = React.useRef<HTMLDivElement>(null);
+  const containerRef = externalContainerRef ?? internalContainerRef;
+
+  // Keep latest values in refs so stable callbacks always see fresh data
+  const dataRef = React.useRef(data);
+  dataRef.current = data;
+  const viewportRef = React.useRef(viewport);
+  viewportRef.current = viewport;
+  const containerRefRef = React.useRef(containerRef);
+  containerRefRef.current = containerRef;
+  const onNodeMoveRef = React.useRef(onNodeMove);
+  onNodeMoveRef.current = onNodeMove;
+  const onConnectRef = React.useRef(onConnect);
+  onConnectRef.current = onConnect;
+  const onNodeClickRef = React.useRef(onNodeClick);
+  onNodeClickRef.current = onNodeClick;
+  const onEdgeClickRef = React.useRef(onEdgeClick);
+  onEdgeClickRef.current = onEdgeClick;
+  const onEdgePathChangeRef = React.useRef(onEdgePathChange);
+  onEdgePathChangeRef.current = onEdgePathChange;
+
   const [dragItem, setDragItem] = React.useState<string | null>(null);
-  // Offset from mouse to node origin at drag start, so the node doesn't jump
-  const [dragOffset, setDragOffset] = React.useState<Point>({ x: 0, y: 0 });
+  const dragItemRef = React.useRef<string | null>(null);
+  // Offset from mouse to node origin at drag start — stored as ref for immediate access
+  const dragOffsetRef = React.useRef<Point>({ x: 0, y: 0 });
 
   // Multi-selection state
   const [selectedNodeIds, setSelectedNodeIds] = React.useState<Set<string>>(new Set());
@@ -110,19 +133,58 @@ export function useSolmu({
     cy2: number;
   } | null>(null);
 
+  // Cancel connector drag on ESC
+  React.useEffect(() => {
+    if (!dragConnector) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setDragConnector(null);
+        setDragLine(null);
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [dragConnector]);
+
   function onMouseDown(event: React.MouseEvent, id: string) {
-    // Compute offset from mouse to node origin so the node doesn't jump
     const node = data.nodes.find((n) => n.id === id);
     const worldPoint = eventToWorld(event);
     if (node && worldPoint) {
-      setDragOffset({ x: node.x - worldPoint.x, y: node.y - worldPoint.y });
+      dragOffsetRef.current = { x: node.x - worldPoint.x, y: node.y - worldPoint.y };
     }
+    dragItemRef.current = id;
     setDragItem(id);
     handleNodeClick(id, event.shiftKey);
   }
 
-  function onMouseUp(_event: React.MouseEvent) {
-    if (dragItem) setDragItem(null);
+  function onMouseUp(event: React.MouseEvent) {
+    // Complete or cancel connector drag
+    if (dragConnector) {
+      const worldPoint = eventToWorld(event);
+      if (worldPoint && onConnect) {
+        const threshold = 5;
+        outer: for (const node of data.nodes) {
+          if (!node.connectors) continue;
+          for (const connector of node.connectors) {
+            if (node.id === dragConnector.node && connector.id === dragConnector.id) continue;
+            const cx = node.x + connector.x;
+            const cy = node.y + connector.y;
+            const dist = Math.sqrt((worldPoint.x - cx) ** 2 + (worldPoint.y - cy) ** 2);
+            if (dist <= threshold) {
+              onConnect(
+                { node: dragConnector.node, connector: dragConnector.id },
+                { node: node.id, connector: connector.id }
+              );
+              break outer;
+            }
+          }
+        }
+      }
+      setDragConnector(null);
+      setDragLine(null);
+    }
+
+    if (dragItemRef.current) { dragItemRef.current = null; setDragItem(null); }
     if (dragSegment) setDragSegment(null);
     // Finish marquee selection
     if (marquee) {
@@ -144,22 +206,19 @@ export function useSolmu({
     }
   }
 
-  // Convert a mouse event to world coordinates via SVG CTM.
-  // getScreenCTM() maps SVG user units to CSS viewport pixels (clientX/clientY),
-  // so its inverse converts clientX/clientY directly to world coords.
+  // Convert a mouse event to world coordinates using the container's bounding rect.
+  // Reads from refs so it always uses the latest viewport / container —
+  // required for memoized node/edge callbacks that close over stale closures.
   function eventToWorld(event: React.MouseEvent): Point | null {
-    const svg = (event.target as Element).closest('svg');
-    if (!svg) return null;
-    const ctm = svg.getScreenCTM();
-    if (!ctm) return null;
-    const svgPoint = svg.createSVGPoint();
-    svgPoint.x = event.clientX;
-    svgPoint.y = event.clientY;
-    const wp = svgPoint.matrixTransform(ctm.inverse());
-    return { x: wp.x, y: wp.y };
+    const ref = containerRefRef.current;
+    const el = ref.current;
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    return viewportRef.current.screenToWorld(event.clientX - rect.left, event.clientY - rect.top);
   }
 
   function onMouseMove(event: React.MouseEvent) {
+    const dragItem = dragItemRef.current;
     if (dragItem && onNodeMove) {
       const node = data.nodes.find((n) => n.id === dragItem);
       if (!node) return;
@@ -167,10 +226,13 @@ export function useSolmu({
       const worldPoint = eventToWorld(event);
       if (worldPoint) {
         // Apply drag offset so the node doesn't jump to the cursor
+        const dragOffset = dragOffsetRef.current;
         const target = { x: worldPoint.x + dragOffset.x, y: worldPoint.y + dragOffset.y };
+        // const target = { x: worldPoint.x , y: worldPoint.y  };
         const snapped = viewport.snapToGrid(target);
         const deltaX = snapped.x - node.x;
         const deltaY = snapped.y - node.y;
+
 
         // Move the dragged node
         onNodeMove(dragItem, snapped.x, snapped.y);
@@ -219,15 +281,10 @@ export function useSolmu({
     }
 
     if (dragSegment && onEdgePathChange) {
-      const svg = (event.target as Element).closest('svg');
-      if (svg) {
-        const ctm = svg.getScreenCTM();
-        if (ctm) {
-          const svgPoint = svg.createSVGPoint();
-          svgPoint.x = event.clientX;
-          svgPoint.y = event.clientY;
-          const worldPoint = svgPoint.matrixTransform(ctm.inverse());
-          const snapped = viewport.snapToGrid({ x: worldPoint.x, y: worldPoint.y });
+      const worldPoint = eventToWorld(event);
+      if (worldPoint) {
+        {
+          const snapped = viewport.snapToGrid(worldPoint);
 
           const deltaX = snapped.x - dragSegment.initialMouseWorld.x;
           const deltaY = snapped.y - dragSegment.initialMouseWorld.y;
@@ -274,37 +331,27 @@ export function useSolmu({
           const startX = sourceNode.x + sourceConnector.x;
           const startY = sourceNode.y + sourceConnector.y;
           
-          // Use SVG coordinate conversion for drag line endpoint
-          const svg = (event.target as Element).closest('svg');
-          if (svg) {
-            const ctm = svg.getScreenCTM();
-            if (ctm) {
-              const svgPoint = svg.createSVGPoint();
-              svgPoint.x = event.clientX;
-              svgPoint.y = event.clientY;
-              const worldPoint = svgPoint.matrixTransform(ctm.inverse());
-              const endX = worldPoint.x;
-              const endY = worldPoint.y;
+          const dragWorldPoint = eventToWorld(event);
+          if (dragWorldPoint) {
+            const endX = dragWorldPoint.x;
+            const endY = dragWorldPoint.y;
 
-              // Calculate control points for the bezier curve
-              const dx = endX - startX;
-              const controlX1 = startX + dx / 3;
-              const controlY1 = startY;
-              const controlX2 = startX + (dx * 2) / 3;
-              const controlY2 = endY;
+            const dx = endX - startX;
+            const controlX1 = startX + dx / 3;
+            const controlY1 = startY;
+            const controlX2 = startX + (dx * 2) / 3;
+            const controlY2 = endY;
 
-              // Update the drag line with bezier curve
-              setDragLine({
-                x1: startX,
-                y1: startY,
-                x2: endX,
-                y2: endY,
-                cx1: controlX1,
-                cy1: controlY1,
-                cx2: controlX2,
-                cy2: controlY2,
-              });
-            }
+            setDragLine({
+              x1: startX,
+              y1: startY,
+              x2: endX,
+              y2: endY,
+              cx1: controlX1,
+              cy1: controlY1,
+              cx2: controlX2,
+              cy2: controlY2,
+            });
           }
         }
       }
@@ -316,16 +363,9 @@ export function useSolmu({
     setMarquee(null); // prevent marquee from starting
   }
 
-  function onConnectorMouseUp(connector: string, node: string) {
-    console.log(connector);
-    if (dragConnector) {
-      if (onConnect)
-        onConnect(
-          { node: dragConnector.node, connector: dragConnector.id },
-          { node, connector }
-        );
-      setDragConnector(null);
-    }
+  function onConnectorMouseUp(_connector: string, _node: string) {
+    // Connection completion is handled in onMouseUp via position hit-testing
+    // to work around the HTML node layer blocking SVG pointer events.
   }
 
   function notifySelectionChange(nodeIds: Set<string>, edgeIds: Set<string>) {
@@ -421,6 +461,8 @@ export function useSolmu({
       return {
         connector,
         node,
+        worldX: node.x + connector.x,
+        worldY: node.y + connector.y,
         isHovered,
         onMouseDown: () => onConnectorMouseDown(connector.id, node.id),
         onMouseOver: () => setHoverConnector({ id: connector.id, node: node.id }),
@@ -520,17 +562,9 @@ export function useSolmu({
   ) {
     event.stopPropagation();
 
-    const svg = (event.target as Element).closest('svg');
-    if (!svg) return;
-
-    const ctm = svg.getScreenCTM();
-    if (!ctm) return;
-
-    const svgPoint = svg.createSVGPoint();
-    svgPoint.x = event.clientX;
-    svgPoint.y = event.clientY;
-    const worldPoint = svgPoint.matrixTransform(ctm.inverse());
-    const snapped = viewport.snapToGrid({ x: worldPoint.x, y: worldPoint.y });
+    const worldPoint = eventToWorld(event);
+    if (!worldPoint) return;
+    const snapped = viewport.snapToGrid(worldPoint);
 
     // Extract waypoints (everything except start and end)
     const initialWaypoints = resolvedPoints.slice(1, -1).map(p => ({ ...p }));
@@ -571,6 +605,7 @@ export function useSolmu({
 
   return {
     canvas: {
+      ref: containerRef,
       props: {
         onMouseDown: (event: React.MouseEvent) => {
           // Only start marquee on primary button, no modifiers used for panning
@@ -580,9 +615,8 @@ export function useSolmu({
             setMarquee({ startWorld: worldPoint, currentWorld: worldPoint, active: false });
           }
         },
-        onMouseMove,
-        onMouseUp,
       },
+      htmlLayerTransform: viewport.getHTMLLayerTransform(),
       width: viewport.getConfig().width,
       height: viewport.getConfig().height,
       viewBox: viewport.getViewBox(),
@@ -602,12 +636,14 @@ export function useSolmu({
           throw new Error(`No renderer found for node type ${node.type}`);
         }
         
+        const screen = viewport.worldToScreen(node.x, node.y);
         return {
           ...node,
           renderer,
           nodeProps: createNodeProps(node),
           connectorProps: createConnectorProps(node),
-          transform: `translate(${node.x}, ${node.y})`,
+          screenX: screen.x,
+          screenY: screen.y,
           isDragging: dragItem === node.id,
           isSelected: selectedNodeIds.has(node.id),
         };

@@ -1,5 +1,5 @@
 import React from "react";
-import { useSolmu, useSolmuKeyboard, useSolmuViewport, duplicateSelection, copyToSystemClipboard, pasteFromSystemClipboard, DefaultEdgeRenderer, SolmuMarkerDefs } from "../../../src";
+import { useSolmu, useSolmuKeyboard, useSolmuViewport, SolmuCanvas, duplicateSelection, copyToSystemClipboard, pasteFromSystemClipboard } from "../../../src";
 
 import type { Edge } from "../../../src/types";
 
@@ -83,13 +83,14 @@ const TABLE_DATA: Record<string, TableInfo> = {
   },
 };
 
-// Layout constants (in mm, world coords)
-const LINE_HEIGHT = 3.5;
-const CHAR_WIDTH = 1.3;
-const PADDING_X = 2;
-const PADDING_Y = 2;
-const MIN_WIDTH = 35;
-const HEADER_HEIGHT = 6;
+// Layout constants in world units. CSS px inside the matrix-transformed layer = world units,
+// so these constants drive both connector positions and HTML sizing identically.
+const LINE_HEIGHT = 7;
+const CHAR_WIDTH = 2.6;
+const PADDING_X = 4;
+const PADDING_Y = 4;
+const MIN_WIDTH = 70;
+const HEADER_HEIGHT = 12;
 
 function measureTable(info: TableInfo) {
   const allLines = [info.name, ...info.columns.map(c => `${c.name} ${c.type}`)];
@@ -99,224 +100,82 @@ function measureTable(info: TableInfo) {
   return { width, height };
 }
 
-function DatabaseTable({ node, ...props }: any) {
+function DatabaseTable({ node, onMouseDown, onMouseUp }: any) {
   const info: TableInfo | undefined = node.data;
   if (!info) {
-    return <rect {...props} width={30} height={20} fill="#fff" stroke="#333" />;
+    return (
+      <div
+        onMouseDown={onMouseDown} onMouseUp={onMouseUp}
+        style={{ width: MIN_WIDTH, height: HEADER_HEIGHT + 2 * PADDING_Y, background: "#fff", border: "0.3px solid #333", cursor: "grab", fontSize: 5 }}
+      >
+        {node.id}
+      </div>
+    );
   }
 
-  const { width, height } = measureTable(info);
-  const halfW = width / 2;
-  const halfH = height / 2;
-
+  const { width } = measureTable(info);
   return (
-    <g {...props}>
-      {/* Hit area */}
-      <rect x={-halfW} y={-halfH} width={width} height={height} fill="transparent" />
-
-      {/* Background */}
-      <rect
-        x={-halfW}
-        y={-halfH}
-        width={width}
-        height={height}
-        fill="#ffffff"
-        stroke="#4a5568"
-        strokeWidth={0.3}
-        rx={0.5}
-        ry={0.5}
-      />
-
-      {/* Header background */}
-      <rect
-        x={-halfW}
-        y={-halfH}
-        width={width}
-        height={HEADER_HEIGHT}
-        fill="#e2e8f0"
-        stroke="#4a5568"
-        strokeWidth={0.3}
-      />
-
-      {/* Table name */}
-      <text
-        x={0}
-        y={-halfH + HEADER_HEIGHT / 2 + 0.8}
-        textAnchor="middle"
-        dominantBaseline="middle"
-        fill="#2d3748"
-        fontSize={2.4}
-        fontWeight="bold"
-        fontFamily="sans-serif"
-      >
-        {info.name}
-      </text>
-
-      {/* Divider after header */}
-      <line
-        x1={-halfW} y1={-halfH + HEADER_HEIGHT}
-        x2={halfW} y2={-halfH + HEADER_HEIGHT}
-        stroke="#4a5568" strokeWidth={0.3}
-      />
-
-      {/* Columns */}
-      {info.columns.map((col, i) => (
-        <g key={`col-${i}`}>
-          {/* Primary key indicator */}
-          {col.isPrimaryKey && (
-            <text
-              x={-halfW + PADDING_X}
-              y={-halfH + HEADER_HEIGHT + PADDING_Y + (i + 0.6) * LINE_HEIGHT}
-              fill="#d69e2e"
-              fontSize={2}
-              fontFamily="sans-serif"
-              fontWeight="bold"
-            >
-              🔑
-            </text>
-          )}
-          {/* Foreign key indicator */}
-          {col.isForeignKey && !col.isPrimaryKey && (
-            <text
-              x={-halfW + PADDING_X}
-              y={-halfH + HEADER_HEIGHT + PADDING_Y + (i + 0.6) * LINE_HEIGHT}
-              fill="#3182ce"
-              fontSize={2}
-              fontFamily="sans-serif"
-            >
-              🔗
-            </text>
-          )}
-          {/* Column name */}
-          <text
-            x={-halfW + PADDING_X + (col.isPrimaryKey || col.isForeignKey ? 3 : 0)}
-            y={-halfH + HEADER_HEIGHT + PADDING_Y + (i + 0.6) * LINE_HEIGHT}
-            fill={col.isPrimaryKey ? "#744210" : col.isForeignKey ? "#2c5282" : "#4a5568"}
-            fontSize={2}
-            fontFamily="monospace"
-            fontWeight={col.isPrimaryKey ? "bold" : "normal"}
-          >
-            {col.name}
-          </text>
-          {/* Column type */}
-          <text
-            x={halfW - PADDING_X}
-            y={-halfH + HEADER_HEIGHT + PADDING_Y + (i + 0.6) * LINE_HEIGHT}
-            textAnchor="end"
-            fill="#718096"
-            fontSize={1.8}
-            fontFamily="monospace"
-            fontStyle="italic"
-          >
-            {col.type}{col.nullable === false ? "" : "?"}
-          </text>
-        </g>
-      ))}
-    </g>
-  );
-}
-
-function DatabaseCanvas({
-  canvas,
-  elements,
-  style,
-  children,
-}: {
-  canvas: any;
-  elements: any;
-  style?: React.CSSProperties;
-  children?: React.ReactNode;
-}) {
-  return (
-    <svg
-      {...canvas.props}
-      viewBox={canvas.viewBox}
+    <div
+      onMouseDown={onMouseDown}
+      onMouseUp={onMouseUp}
       style={{
-        background: "#f7fafc",
-        width: "100%",
-        height: "100%",
+        background: "#ffffff",
+        border: "0.3px solid #4a5568",
+        borderRadius: 0.5,
+        cursor: "grab",
         userSelect: "none",
-        ...style,
+        width,
+        fontFamily: "monospace",
+        fontSize: 5,
+        boxShadow: "0 0.5px 2px rgba(0,0,0,0.1)",
+        whiteSpace: "nowrap",
+        boxSizing: "border-box",
       }}
     >
-      <SolmuMarkerDefs edges={elements.edges} />
-
-      {/* Grid dots */}
-      {canvas.gridDots?.map((dot: any, i: number) => (
-        <circle
-          key={`grid-${i}`}
-          cx={dot.x} cy={dot.y} r={dot.size}
-          fill="#e2e8f0" opacity={dot.opacity}
-        />
-      ))}
-
-      {/* Edges */}
-      {elements.edges.map((edge: any) => (
-        <DefaultEdgeRenderer key={edge.id} edge={edge} />
-      ))}
-
-      {/* Nodes */}
-      {elements.nodes.map((node: any) => {
-        const NodeComponent = node.renderer;
-        const info: TableInfo | undefined = node.data;
-        const dim = info ? measureTable(info) : { width: 30, height: 20 };
-        return (
-          <g key={node.id} transform={node.transform}>
-            {/* Selection outline */}
-            {node.isSelected && (
-              <rect
-                x={-dim.width / 2 - 1}
-                y={-dim.height / 2 - 1}
-                width={dim.width + 2}
-                height={dim.height + 2}
-                fill="none"
-                stroke="#3182ce"
-                strokeWidth={0.5}
-                strokeDasharray="2 1"
-                rx={1}
-              />
-            )}
-            <g transform={node.rotation ? `rotate(${node.rotation})` : undefined}>
-              <NodeComponent {...node.nodeProps} />
-            </g>
-            {node.connectorProps.map((cp: any) => (
-              <DbConnectorRenderer key={cp.connector.id} {...cp} />
-            ))}
-          </g>
-        );
-      })}
-
-      {/* Drag line */}
-      {elements.dragLine?.isVisible && (
-        <path
-          d={elements.dragLine.path}
-          stroke="#3182ce"
-          strokeWidth="0.3"
-          strokeDasharray="1 1"
-          fill="none"
-        />
-      )}
-
-      {/* Marquee selection rectangle */}
-      {elements.marquee && (
-        <rect
-          x={elements.marquee.x}
-          y={elements.marquee.y}
-          width={elements.marquee.width}
-          height={elements.marquee.height}
-          fill="rgba(49, 130, 206, 0.12)"
-          stroke="#3182ce"
-          strokeWidth={0.3}
-          strokeDasharray="2 1"
-          pointerEvents="none"
-        />
-      )}
-
-      {/* Relationship labels */}
-      {children}
-    </svg>
+      {/* Header — exact height: HEADER_HEIGHT */}
+      <div style={{
+        height: HEADER_HEIGHT,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#e2e8f0",
+        borderBottom: "0.3px solid #4a5568",
+        paddingLeft: PADDING_X,
+        paddingRight: PADDING_X,
+        fontFamily: "sans-serif",
+        fontSize: 5.5,
+        fontWeight: "bold",
+        color: "#2d3748",
+        boxSizing: "border-box",
+      }}>
+        {info.name}
+      </div>
+      {/* Columns — each row is exactly LINE_HEIGHT, with PADDING_Y top/bottom */}
+      <div style={{ paddingTop: PADDING_Y, paddingBottom: PADDING_Y }}>
+        {info.columns.map((col, i) => (
+          <div key={i} style={{
+            height: LINE_HEIGHT,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            paddingLeft: PADDING_X,
+            paddingRight: PADDING_X,
+            gap: 3,
+            boxSizing: "border-box",
+          }}>
+            <span style={{ color: col.isPrimaryKey ? "#744210" : col.isForeignKey ? "#2c5282" : "#4a5568", fontWeight: col.isPrimaryKey ? "bold" : "normal" }}>
+              {col.isPrimaryKey ? "* " : col.isForeignKey ? "~ " : "  "}{col.name}
+            </span>
+            <span style={{ color: "#718096", fontStyle: "italic", fontSize: 4.5 }}>
+              {col.type}{col.nullable === false ? "" : "?"}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
+
 
 // --- Main App ---
 
@@ -338,12 +197,12 @@ function computeConnectors(id: string, info?: TableInfo) {
   ]);
 }
 
-function DbConnectorRenderer({ connector, isHovered, onMouseDown, onMouseOver, onMouseUp, onMouseOut }: any) {
+function DbConnectorRenderer({ worldX, worldY, isHovered, onMouseDown, onMouseOver, onMouseUp, onMouseOut }: any) {
   const r = isHovered ? 1.2 : 0.7;
   return (
     <circle
-      cx={connector.x}
-      cy={connector.y}
+      cx={worldX}
+      cy={worldY}
       r={r}
       fill={isHovered ? "#3182ce" : "#a0aec0"}
       opacity={isHovered ? 1 : 0.5}
@@ -357,10 +216,10 @@ function DbConnectorRenderer({ connector, isHovered, onMouseDown, onMouseOver, o
 }
 
 export default function DatabaseDiagramApp() {
-  const { viewportConfig, containerProps, isPanning } = useSolmuViewport({
+  const { viewportConfig, containerRef, containerProps, isPanning } = useSolmuViewport({
     origin: 'top-left' as const,
     units: 'mm' as const,
-    worldBounds: { x: -200, y: -200, width: 400, height: 400 },
+    worldBounds: { x: -250, y: -200, width: 600, height: 600 },
     zoom: 1,
     pan: { x: 0, y: 0 },
     grid: {
@@ -372,13 +231,13 @@ export default function DatabaseDiagramApp() {
 
   const [data, setData] = React.useState({
     nodes: [
-      { id: "users", x: -60, y: -40, type: "db-table", connectors: computeConnectors("users"), data: TABLE_DATA["users"] },
-      { id: "posts", x: 20, y: -40, type: "db-table", connectors: computeConnectors("posts"), data: TABLE_DATA["posts"] },
-      { id: "comments", x: 20, y: 30, type: "db-table", connectors: computeConnectors("comments"), data: TABLE_DATA["comments"] },
-      { id: "categories", x: -60, y: 30, type: "db-table", connectors: computeConnectors("categories"), data: TABLE_DATA["categories"] },
-      { id: "post_categories", x: -60, y: 90, type: "db-table", connectors: computeConnectors("post_categories"), data: TABLE_DATA["post_categories"] },
-      { id: "tags", x: 100, y: -40, type: "db-table", connectors: computeConnectors("tags"), data: TABLE_DATA["tags"] },
-      { id: "post_tags", x: 100, y: 30, type: "db-table", connectors: computeConnectors("post_tags"), data: TABLE_DATA["post_tags"] },
+      { id: "users", x: -90, y: -80, type: "db-table", connectors: computeConnectors("users"), data: TABLE_DATA["users"] },
+      { id: "posts", x: 40, y: -80, type: "db-table", connectors: computeConnectors("posts"), data: TABLE_DATA["posts"] },
+      { id: "comments", x: 40, y: 50, type: "db-table", connectors: computeConnectors("comments"), data: TABLE_DATA["comments"] },
+      { id: "categories", x: -90, y: 50, type: "db-table", connectors: computeConnectors("categories"), data: TABLE_DATA["categories"] },
+      { id: "post_categories", x: -90, y: 160, type: "db-table", connectors: computeConnectors("post_categories"), data: TABLE_DATA["post_categories"] },
+      { id: "tags", x: 160, y: -80, type: "db-table", connectors: computeConnectors("tags"), data: TABLE_DATA["tags"] },
+      { id: "post_tags", x: 160, y: 50, type: "db-table", connectors: computeConnectors("post_tags"), data: TABLE_DATA["post_tags"] },
     ],
     edges: [
       // users.id 1---* posts.user_id
@@ -495,9 +354,10 @@ export default function DatabaseDiagramApp() {
     },
   };
 
-  const { canvas, elements, selection, actions } = useSolmu({
+  const { canvas, elements, interactions, selection, actions } = useSolmu({
     data,
     config,
+    containerRef,
     onNodeMove,
     onConnect,
     onEdgePathChange,
@@ -633,54 +493,27 @@ export default function DatabaseDiagramApp() {
       </div>
 
       {/* Canvas */}
-      <div
-        style={{ width: "100%", height: "100%", overflow: "hidden" }}
-        {...containerProps}
+      <SolmuCanvas
+        canvas={canvas}
+        elements={elements}
+        interactions={interactions}
+        connectorRenderer={DbConnectorRenderer}
+        style={{ background: "#f7fafc", cursor: isPanning ? 'grabbing' : 'default' }}
+        onMouseDown={containerProps.onMouseDown}
+        onMouseMove={containerProps.onMouseMove}
       >
-        <DatabaseCanvas
-          canvas={canvas}
-          elements={elements}
-          style={{
-            cursor: isPanning ? 'grabbing' : 'default',
-            width: "100%",
-            height: "100%",
-          }}
-        >
-          {/* Cardinality labels at edge endpoints */}
-          {cardinalityLabels.map((cl) => {
-            const edge = elements.edges[cl.edgeIndex];
-            if (!edge) return null;
-            return (
-              <g key={`card-${cl.edgeIndex}`}>
-                <text
-                  x={edge.sourceLabelPoint.x}
-                  y={edge.sourceLabelPoint.y}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fill="#4a5568"
-                  fontSize={2.2}
-                  fontFamily="sans-serif"
-                  fontWeight="bold"
-                >
-                  {cl.sourceLabel}
-                </text>
-                <text
-                  x={edge.targetLabelPoint.x}
-                  y={edge.targetLabelPoint.y}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fill="#4a5568"
-                  fontSize={2.2}
-                  fontFamily="sans-serif"
-                  fontWeight="bold"
-                >
-                  {cl.targetLabel}
-                </text>
-              </g>
-            );
-          })}
-        </DatabaseCanvas>
-      </div>
+        {/* Cardinality labels at edge endpoints */}
+        {cardinalityLabels.map((cl) => {
+          const edge = elements.edges[cl.edgeIndex];
+          if (!edge) return null;
+          return (
+            <g key={`card-${cl.edgeIndex}`}>
+              <text x={edge.sourceLabelPoint.x} y={edge.sourceLabelPoint.y} textAnchor="middle" dominantBaseline="middle" fill="#4a5568" fontSize={2.2} fontFamily="sans-serif" fontWeight="bold">{cl.sourceLabel}</text>
+              <text x={edge.targetLabelPoint.x} y={edge.targetLabelPoint.y} textAnchor="middle" dominantBaseline="middle" fill="#4a5568" fontSize={2.2} fontFamily="sans-serif" fontWeight="bold">{cl.targetLabel}</text>
+            </g>
+          );
+        })}
+      </SolmuCanvas>
     </div>
   );
 }

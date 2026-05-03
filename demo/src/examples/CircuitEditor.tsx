@@ -4,76 +4,92 @@ import type { Edge } from "../../../src/types";
 
 // --- Electronic Component Symbols ---
 
-function Resistor({ node, ...props }: any) {
+const SYMBOL_STROKE = "#00e676";
+const SYMBOL_STROKE_WIDTH = 0.4;
+
+function SymbolDiv({ width, height, children, onMouseDown, onMouseUp }: {
+  width: number; height: number; children: React.ReactNode;
+  onMouseDown?: React.MouseEventHandler; onMouseUp?: React.MouseEventHandler;
+}) {
   return (
-    <g {...props}>
-      <rect x={-6} y={-2} width={12} height={4} fill="transparent" />
+    <div onMouseDown={onMouseDown} onMouseUp={onMouseUp} style={{ lineHeight: 0 }}>
+      <svg
+        width={width}
+        height={height}
+        viewBox={`${-width / 2} ${-height / 2} ${width} ${height}`}
+        overflow="visible"
+      >
+        {children}
+      </svg>
+    </div>
+  );
+}
+
+function Resistor({ node, onMouseDown, onMouseUp }: any) {
+  return (
+    <SymbolDiv width={12} height={4} onMouseDown={onMouseDown} onMouseUp={onMouseUp}>
       <path
         d="M -6 0 L -4.5 0 L -3.75 1.5 L -2.25 -1.5 L -0.75 1.5 L 0.75 -1.5 L 2.25 1.5 L 3.75 -1.5 L 4.5 0 L 6 0"
         fill="none"
-        stroke="#00e676"
-        strokeWidth={0.4}
+        stroke={SYMBOL_STROKE}
+        strokeWidth={SYMBOL_STROKE_WIDTH}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-    </g>
+    </SymbolDiv>
   );
 }
 
-function Capacitor({ node, ...props }: any) {
+function Capacitor({ node, onMouseDown, onMouseUp }: any) {
   return (
-    <g {...props}>
-      <rect x={-6} y={-3} width={12} height={6} fill="transparent" />
-      <line x1={-6} y1={0} x2={-0.8} y2={0} stroke="#00e676" strokeWidth={0.4} />
-      <line x1={0.8} y1={0} x2={6} y2={0} stroke="#00e676" strokeWidth={0.4} />
-      <line x1={-0.8} y1={-2.5} x2={-0.8} y2={2.5} stroke="#00e676" strokeWidth={0.5} />
-      <line x1={0.8} y1={-2.5} x2={0.8} y2={2.5} stroke="#00e676" strokeWidth={0.5} />
-    </g>
+    <SymbolDiv width={12} height={6} onMouseDown={onMouseDown} onMouseUp={onMouseUp}>
+      <line x1={-6} y1={0} x2={-0.8} y2={0} stroke={SYMBOL_STROKE} strokeWidth={SYMBOL_STROKE_WIDTH} />
+      <line x1={0.8} y1={0} x2={6} y2={0} stroke={SYMBOL_STROKE} strokeWidth={SYMBOL_STROKE_WIDTH} />
+      <line x1={-0.8} y1={-2.5} x2={-0.8} y2={2.5} stroke={SYMBOL_STROKE} strokeWidth={0.5} />
+      <line x1={0.8} y1={-2.5} x2={0.8} y2={2.5} stroke={SYMBOL_STROKE} strokeWidth={0.5} />
+    </SymbolDiv>
   );
 }
 
-function OpAmp({ node, ...props }: any) {
+function OpAmp({ node, onMouseDown, onMouseUp }: any) {
   return (
-    <g {...props}>
-      <rect x={-8} y={-5.5} width={16} height={11} fill="transparent" />
+    <SymbolDiv width={16} height={11} onMouseDown={onMouseDown} onMouseUp={onMouseUp}>
       <path
         d="M -5 -5 L 5 0 L -5 5 Z"
         fill="none"
-        stroke="#00e676"
-        strokeWidth={0.4}
+        stroke={SYMBOL_STROKE}
+        strokeWidth={SYMBOL_STROKE_WIDTH}
         strokeLinejoin="round"
       />
-      <text x={-3.5} y={-2} fill="#00e676" fontSize={2.5} textAnchor="middle" dominantBaseline="middle">+</text>
-      <text x={-3.5} y={2} fill="#00e676" fontSize={2.5} textAnchor="middle" dominantBaseline="middle">&minus;</text>
-      <line x1={-8} y1={-2.5} x2={-5} y2={-2.5} stroke="#00e676" strokeWidth={0.4} />
-      <line x1={-8} y1={2.5} x2={-5} y2={2.5} stroke="#00e676" strokeWidth={0.4} />
-      <line x1={5} y1={0} x2={8} y2={0} stroke="#00e676" strokeWidth={0.4} />
-    </g>
+      <text x={-3.5} y={-2} fill={SYMBOL_STROKE} fontSize={2.5} textAnchor="middle" dominantBaseline="middle">+</text>
+      <text x={-3.5} y={2} fill={SYMBOL_STROKE} fontSize={2.5} textAnchor="middle" dominantBaseline="middle">&minus;</text>
+      <line x1={-8} y1={-2.5} x2={-5} y2={-2.5} stroke={SYMBOL_STROKE} strokeWidth={SYMBOL_STROKE_WIDTH} />
+      <line x1={-8} y1={2.5} x2={-5} y2={2.5} stroke={SYMBOL_STROKE} strokeWidth={SYMBOL_STROKE_WIDTH} />
+      <line x1={5} y1={0} x2={8} y2={0} stroke={SYMBOL_STROKE} strokeWidth={SYMBOL_STROKE_WIDTH} />
+    </SymbolDiv>
   );
 }
 
-function Ground({ node, ...props }: any) {
+function Ground({ node, onMouseDown, onMouseUp }: any) {
   return (
-    <g {...props}>
-      <rect x={-3.5} y={-2.5} width={7} height={5.5} fill="transparent" />
-      <line x1={0} y1={2.5} x2={0} y2={0} stroke="#00e676" strokeWidth={0.4} />
-      <line x1={-3} y1={0} x2={3} y2={0} stroke="#00e676" strokeWidth={0.4} />
-      <line x1={-2} y1={-1} x2={2} y2={-1} stroke="#00e676" strokeWidth={0.4} />
-      <line x1={-1} y1={-2} x2={1} y2={-2} stroke="#00e676" strokeWidth={0.4} />
-    </g>
+    <SymbolDiv width={7} height={5.5} onMouseDown={onMouseDown} onMouseUp={onMouseUp}>
+      <line x1={0} y1={2.5} x2={0} y2={0} stroke={SYMBOL_STROKE} strokeWidth={SYMBOL_STROKE_WIDTH} />
+      <line x1={-3} y1={0} x2={3} y2={0} stroke={SYMBOL_STROKE} strokeWidth={SYMBOL_STROKE_WIDTH} />
+      <line x1={-2} y1={-1} x2={2} y2={-1} stroke={SYMBOL_STROKE} strokeWidth={SYMBOL_STROKE_WIDTH} />
+      <line x1={-1} y1={-2} x2={1} y2={-2} stroke={SYMBOL_STROKE} strokeWidth={SYMBOL_STROKE_WIDTH} />
+    </SymbolDiv>
   );
 }
 
-function VoltageSource({ node, ...props }: any) {
+function VoltageSource({ node, onMouseDown, onMouseUp }: any) {
   return (
-    <g {...props}>
-      <rect x={-3.5} y={-5.5} width={7} height={11} fill="transparent" />
-      <line x1={0} y1={5} x2={0} y2={3} stroke="#00e676" strokeWidth={0.4} />
-      <line x1={0} y1={-3} x2={0} y2={-5} stroke="#00e676" strokeWidth={0.4} />
-      <circle cx={0} cy={0} r={3} fill="none" stroke="#00e676" strokeWidth={0.4} />
-      <text x={0} y={-1} fill="#00e676" fontSize={2.5} textAnchor="middle" dominantBaseline="middle">+</text>
-      <text x={0} y={1.5} fill="#00e676" fontSize={2.5} textAnchor="middle" dominantBaseline="middle">&minus;</text>
-    </g>
+    <SymbolDiv width={7} height={11} onMouseDown={onMouseDown} onMouseUp={onMouseUp}>
+      <line x1={0} y1={5} x2={0} y2={3} stroke={SYMBOL_STROKE} strokeWidth={SYMBOL_STROKE_WIDTH} />
+      <line x1={0} y1={-3} x2={0} y2={-5} stroke={SYMBOL_STROKE} strokeWidth={SYMBOL_STROKE_WIDTH} />
+      <circle cx={0} cy={0} r={3} fill="none" stroke={SYMBOL_STROKE} strokeWidth={SYMBOL_STROKE_WIDTH} />
+      <text x={0} y={-1} fill={SYMBOL_STROKE} fontSize={2.5} textAnchor="middle" dominantBaseline="middle">+</text>
+      <text x={0} y={1.5} fill={SYMBOL_STROKE} fontSize={2.5} textAnchor="middle" dominantBaseline="middle">&minus;</text>
+    </SymbolDiv>
   );
 }
 
@@ -179,7 +195,7 @@ export default function App() {
   // SVG-space mouse position (Y down) for hit-testing against node positions
   const svgMousePos = React.useRef({ x: 0, y: 0 });
 
-  const { viewportConfig, containerProps, isPanning } = useSolmuViewport({
+  const { viewportConfig, containerRef, containerProps, isPanning } = useSolmuViewport({
     origin: 'bottom-left' as const,
     units: 'mm' as const,
     worldBounds: { x: -200, y: -200, width: 400, height: 400 },
@@ -301,9 +317,10 @@ export default function App() {
     },
   };
 
-  const { canvas, elements, selection, actions } = useSolmu({
+  const { canvas, elements, interactions, selection, actions } = useSolmu({
     data,
     config,
+    containerRef,
     onNodeMove,
     onConnect,
     onEdgePathChange,
@@ -321,26 +338,14 @@ export default function App() {
 
   // Track cursor position in world coordinates for display and hit-testing
   const handleContainerMouseMove = (e: React.MouseEvent) => {
-    if (canvas.viewport) {
-      const svg = e.currentTarget.querySelector('svg');
-      if (svg) {
-        const rect = svg.getBoundingClientRect();
-        const worldPos = canvas.viewport.screenToWorld(
-          e.clientX - rect.left,
-          e.clientY - rect.top
-        );
-        setMousePos(worldPos);
-
-        // Also compute SVG-space position for hit-testing
-        const ctm = (svg as SVGSVGElement).getScreenCTM();
-        if (ctm) {
-          const pt = (svg as SVGSVGElement).createSVGPoint();
-          pt.x = e.clientX;
-          pt.y = e.clientY;
-          const svgPt = pt.matrixTransform(ctm.inverse());
-          svgMousePos.current = { x: svgPt.x, y: svgPt.y };
-        }
-      }
+    if (canvas.viewport && canvas.ref.current) {
+      const rect = canvas.ref.current.getBoundingClientRect();
+      const worldPos = canvas.viewport.screenToWorld(
+        e.clientX - rect.left,
+        e.clientY - rect.top
+      );
+      setMousePos(worldPos);
+      svgMousePos.current = worldPos;
     }
   };
 
@@ -388,44 +393,33 @@ export default function App() {
       </div>
 
       {/* Canvas */}
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          overflow: "hidden",
-        }}
-        {...containerProps}
+      <SolmuCanvas
+        canvas={canvas}
+        elements={elements}
+        interactions={interactions}
+        style={{ cursor: isPanning ? 'grabbing' : 'default' }}
+        onMouseDown={containerProps.onMouseDown}
         onMouseMove={(e) => {
           containerProps.onMouseMove(e);
           handleContainerMouseMove(e);
         }}
       >
-        <SolmuCanvas
-          canvas={canvas}
-          elements={elements}
-          style={{
-            cursor: isPanning ? 'grabbing' : 'default',
-            width: "100%",
-            height: "100%",
-          }}
-        >
-          {/* Component reference designator labels */}
-          {labels.map((l) => (
-            <text
-              key={`label-${l.id}`}
-              x={l.x + l.offsetX}
-              y={l.y}
-              fill="#80cbc4"
-              fontSize={2}
-              textAnchor="middle"
-              dominantBaseline="auto"
-              fontFamily="monospace"
-            >
-              {l.id}
-            </text>
-          ))}
-        </SolmuCanvas>
-      </div>
+        {/* Component reference designator labels */}
+        {labels.map((l) => (
+          <text
+            key={`label-${l.id}`}
+            x={l.x + l.offsetX}
+            y={l.y}
+            fill="#80cbc4"
+            fontSize={2}
+            textAnchor="middle"
+            dominantBaseline="auto"
+            fontFamily="monospace"
+          >
+            {l.id}
+          </text>
+        ))}
+      </SolmuCanvas>
     </div>
   );
 }
