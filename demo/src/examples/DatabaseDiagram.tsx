@@ -83,13 +83,14 @@ const TABLE_DATA: Record<string, TableInfo> = {
   },
 };
 
-// Layout constants (in mm, world coords)
-const LINE_HEIGHT = 3.5;
-const CHAR_WIDTH = 1.3;
-const PADDING_X = 2;
-const PADDING_Y = 2;
-const MIN_WIDTH = 35;
-const HEADER_HEIGHT = 6;
+// Layout constants in world units. CSS px inside the matrix-transformed layer = world units,
+// so these constants drive both connector positions and HTML sizing identically.
+const LINE_HEIGHT = 7;
+const CHAR_WIDTH = 2.6;
+const PADDING_X = 4;
+const PADDING_Y = 4;
+const MIN_WIDTH = 70;
+const HEADER_HEIGHT = 12;
 
 function measureTable(info: TableInfo) {
   const allLines = [info.name, ...info.columns.map(c => `${c.name} ${c.type}`)];
@@ -105,51 +106,67 @@ function DatabaseTable({ node, onMouseDown, onMouseUp }: any) {
     return (
       <div
         onMouseDown={onMouseDown} onMouseUp={onMouseUp}
-        style={{ width: 60, height: 40, background: "#fff", border: "1px solid #333", cursor: "grab" }}
+        style={{ width: MIN_WIDTH, height: HEADER_HEIGHT + 2 * PADDING_Y, background: "#fff", border: "0.3px solid #333", cursor: "grab", fontSize: 5 }}
       >
         {node.id}
       </div>
     );
   }
 
+  const { width } = measureTable(info);
   return (
     <div
       onMouseDown={onMouseDown}
       onMouseUp={onMouseUp}
       style={{
         background: "#ffffff",
-        border: "0.5px solid #4a5568",
-        borderRadius: 1,
+        border: "0.3px solid #4a5568",
+        borderRadius: 0.5,
         cursor: "grab",
         userSelect: "none",
-        minWidth: 70,
+        width,
         fontFamily: "monospace",
-        fontSize: 10,
-        boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
+        fontSize: 5,
+        boxShadow: "0 0.5px 2px rgba(0,0,0,0.1)",
         whiteSpace: "nowrap",
+        boxSizing: "border-box",
       }}
     >
-      {/* Header */}
+      {/* Header — exact height: HEADER_HEIGHT */}
       <div style={{
+        height: HEADER_HEIGHT,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
         background: "#e2e8f0",
-        borderBottom: "0.5px solid #4a5568",
-        padding: "4px 8px",
-        textAlign: "center",
+        borderBottom: "0.3px solid #4a5568",
+        paddingLeft: PADDING_X,
+        paddingRight: PADDING_X,
         fontFamily: "sans-serif",
-        fontSize: 11,
+        fontSize: 5.5,
         fontWeight: "bold",
         color: "#2d3748",
+        boxSizing: "border-box",
       }}>
         {info.name}
       </div>
-      {/* Columns */}
-      <div style={{ padding: "4px 0" }}>
+      {/* Columns — each row is exactly LINE_HEIGHT, with PADDING_Y top/bottom */}
+      <div style={{ paddingTop: PADDING_Y, paddingBottom: PADDING_Y }}>
         {info.columns.map((col, i) => (
-          <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "1px 8px", gap: 8 }}>
+          <div key={i} style={{
+            height: LINE_HEIGHT,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            paddingLeft: PADDING_X,
+            paddingRight: PADDING_X,
+            gap: 3,
+            boxSizing: "border-box",
+          }}>
             <span style={{ color: col.isPrimaryKey ? "#744210" : col.isForeignKey ? "#2c5282" : "#4a5568", fontWeight: col.isPrimaryKey ? "bold" : "normal" }}>
-              {col.isPrimaryKey ? "🔑 " : col.isForeignKey ? "🔗 " : "  "}{col.name}
+              {col.isPrimaryKey ? "* " : col.isForeignKey ? "~ " : "  "}{col.name}
             </span>
-            <span style={{ color: "#718096", fontStyle: "italic", fontSize: 9 }}>
+            <span style={{ color: "#718096", fontStyle: "italic", fontSize: 4.5 }}>
               {col.type}{col.nullable === false ? "" : "?"}
             </span>
           </div>
@@ -202,7 +219,7 @@ export default function DatabaseDiagramApp() {
   const { viewportConfig, containerRef, containerProps, isPanning } = useSolmuViewport({
     origin: 'top-left' as const,
     units: 'mm' as const,
-    worldBounds: { x: -200, y: -200, width: 400, height: 400 },
+    worldBounds: { x: -250, y: -200, width: 600, height: 600 },
     zoom: 1,
     pan: { x: 0, y: 0 },
     grid: {
@@ -214,13 +231,13 @@ export default function DatabaseDiagramApp() {
 
   const [data, setData] = React.useState({
     nodes: [
-      { id: "users", x: -60, y: -40, type: "db-table", connectors: computeConnectors("users"), data: TABLE_DATA["users"] },
-      { id: "posts", x: 20, y: -40, type: "db-table", connectors: computeConnectors("posts"), data: TABLE_DATA["posts"] },
-      { id: "comments", x: 20, y: 30, type: "db-table", connectors: computeConnectors("comments"), data: TABLE_DATA["comments"] },
-      { id: "categories", x: -60, y: 30, type: "db-table", connectors: computeConnectors("categories"), data: TABLE_DATA["categories"] },
-      { id: "post_categories", x: -60, y: 90, type: "db-table", connectors: computeConnectors("post_categories"), data: TABLE_DATA["post_categories"] },
-      { id: "tags", x: 100, y: -40, type: "db-table", connectors: computeConnectors("tags"), data: TABLE_DATA["tags"] },
-      { id: "post_tags", x: 100, y: 30, type: "db-table", connectors: computeConnectors("post_tags"), data: TABLE_DATA["post_tags"] },
+      { id: "users", x: -90, y: -80, type: "db-table", connectors: computeConnectors("users"), data: TABLE_DATA["users"] },
+      { id: "posts", x: 40, y: -80, type: "db-table", connectors: computeConnectors("posts"), data: TABLE_DATA["posts"] },
+      { id: "comments", x: 40, y: 50, type: "db-table", connectors: computeConnectors("comments"), data: TABLE_DATA["comments"] },
+      { id: "categories", x: -90, y: 50, type: "db-table", connectors: computeConnectors("categories"), data: TABLE_DATA["categories"] },
+      { id: "post_categories", x: -90, y: 160, type: "db-table", connectors: computeConnectors("post_categories"), data: TABLE_DATA["post_categories"] },
+      { id: "tags", x: 160, y: -80, type: "db-table", connectors: computeConnectors("tags"), data: TABLE_DATA["tags"] },
+      { id: "post_tags", x: 160, y: 50, type: "db-table", connectors: computeConnectors("post_tags"), data: TABLE_DATA["post_tags"] },
     ],
     edges: [
       // users.id 1---* posts.user_id

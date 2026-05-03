@@ -14,8 +14,8 @@ function SymbolDiv({ width, height, children, onMouseDown, onMouseUp }: {
   return (
     <div onMouseDown={onMouseDown} onMouseUp={onMouseUp} style={{ lineHeight: 0 }}>
       <svg
-        width={width * 4}
-        height={height * 4}
+        width={width}
+        height={height}
         viewBox={`${-width / 2} ${-height / 2} ${width} ${height}`}
         overflow="visible"
       >

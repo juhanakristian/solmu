@@ -78,6 +78,8 @@ export type SolmuCanvas = {
   height: number;
   viewBox: string;
   gridDots?: Array<{ x: number; y: number; size: number; opacity: number }>;
+  /** CSS matrix transform for the HTML node layer — apply as `transform` on the layer wrapper */
+  htmlLayerTransform: string;
   viewport?: {
     screenToWorld: (x: number, y: number) => { x: number; y: number };
     worldToScreen: (x: number, y: number) => { x: number; y: number };

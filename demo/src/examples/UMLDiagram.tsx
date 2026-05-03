@@ -84,27 +84,23 @@ const CLASS_DATA: Record<string, ClassInfo> = {
   },
 };
 
-const BOX_STYLES: React.CSSProperties = {
-  background: "#fffde7",
-  border: "0.5px solid #5d4037",
-  borderRadius: 2,
-  fontFamily: "sans-serif",
-  fontSize: 11,
-  color: "#4e342e",
-  minWidth: 120,
-  boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-  cursor: "grab",
-  whiteSpace: "nowrap",
-};
+// Layout constants in world units (CSS px inside the matrix layer = world units).
+const UML_FONT = 5;
+const UML_LINE = 7;       // line-height per row
+const UML_PAD_V = 3;      // top+bottom padding per section
+const UML_PAD_H = 4;      // left+right padding
+
+// Height of a section with n rows (min 1 to avoid zero-height sections)
+const sectionH = (n: number) => 2 * UML_PAD_V + Math.max(n, 1) * UML_LINE;
+const headerH = (hasStereotype: boolean) => 2 * UML_PAD_V + (hasStereotype ? 2 : 1) * UML_LINE;
 
 function UMLClassBox({ node, onMouseDown, onMouseUp }: any) {
   const info = CLASS_DATA[node.id];
   if (!info) {
     return (
       <div
-        onMouseDown={onMouseDown}
-        onMouseUp={onMouseUp}
-        style={{ ...BOX_STYLES, padding: "4px 8px" }}
+        onMouseDown={onMouseDown} onMouseUp={onMouseUp}
+        style={{ width: 60, fontSize: UML_FONT, border: "0.3px solid #5d4037", background: "#fffde7", cursor: "grab", padding: `${UML_PAD_V}px ${UML_PAD_H}px` }}
       >
         {node.id}
       </div>
@@ -112,27 +108,69 @@ function UMLClassBox({ node, onMouseDown, onMouseUp }: any) {
   }
 
   return (
-    <div onMouseDown={onMouseDown} onMouseUp={onMouseUp} style={BOX_STYLES}>
+    <div onMouseDown={onMouseDown} onMouseUp={onMouseUp} style={{
+      background: "#fffde7",
+      border: "0.3px solid #5d4037",
+      borderRadius: 1,
+      fontFamily: "sans-serif",
+      fontSize: UML_FONT,
+      color: "#4e342e",
+      cursor: "grab",
+      userSelect: "none",
+      whiteSpace: "nowrap",
+      boxSizing: "border-box",
+    }}>
       {/* Header */}
-      <div style={{ padding: "4px 8px", textAlign: "center", borderBottom: "0.5px solid #5d4037" }}>
+      <div style={{
+        height: headerH(!!info.stereotype),
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        paddingLeft: UML_PAD_H,
+        paddingRight: UML_PAD_H,
+        borderBottom: "0.3px solid #5d4037",
+        boxSizing: "border-box",
+      }}>
         {info.stereotype && (
-          <div style={{ fontSize: 9, color: "#8d6e63", fontStyle: "italic" }}>
+          <div style={{ lineHeight: `${UML_LINE}px`, fontSize: UML_FONT * 0.9, color: "#8d6e63", fontStyle: "italic" }}>
             {`\u00AB${info.stereotype}\u00BB`}
           </div>
         )}
-        <div style={{ fontWeight: "bold", fontSize: 12, color: "#3e2723" }}>{info.name}</div>
+        <div style={{ lineHeight: `${UML_LINE}px`, fontWeight: "bold", color: "#3e2723" }}>{info.name}</div>
       </div>
       {/* Attributes */}
-      <div style={{ padding: "3px 8px", borderBottom: "0.5px solid #5d4037", minHeight: 8 }}>
-        {info.attributes.map((attr, i) => (
-          <div key={i} style={{ fontSize: 10, fontFamily: "monospace", lineHeight: "1.4" }}>{attr}</div>
-        ))}
+      <div style={{
+        height: sectionH(info.attributes.length),
+        paddingTop: UML_PAD_V,
+        paddingBottom: UML_PAD_V,
+        paddingLeft: UML_PAD_H,
+        paddingRight: UML_PAD_H,
+        borderBottom: "0.3px solid #5d4037",
+        boxSizing: "border-box",
+      }}>
+        {info.attributes.length > 0
+          ? info.attributes.map((attr, i) => (
+              <div key={i} style={{ lineHeight: `${UML_LINE}px`, fontFamily: "monospace" }}>{attr}</div>
+            ))
+          : <div style={{ height: UML_LINE }} />
+        }
       </div>
       {/* Methods */}
-      <div style={{ padding: "3px 8px", minHeight: 8 }}>
-        {info.methods.map((method, i) => (
-          <div key={i} style={{ fontSize: 10, fontFamily: "monospace", lineHeight: "1.4" }}>{method}</div>
-        ))}
+      <div style={{
+        height: sectionH(info.methods.length),
+        paddingTop: UML_PAD_V,
+        paddingBottom: UML_PAD_V,
+        paddingLeft: UML_PAD_H,
+        paddingRight: UML_PAD_H,
+        boxSizing: "border-box",
+      }}>
+        {info.methods.length > 0
+          ? info.methods.map((method, i) => (
+              <div key={i} style={{ lineHeight: `${UML_LINE}px`, fontFamily: "monospace" }}>{method}</div>
+            ))
+          : <div style={{ height: UML_LINE }} />
+        }
       </div>
     </div>
   );
@@ -151,16 +189,22 @@ type RelationshipLabel = {
 
 // --- Main App ---
 
-// Approximate class box dimensions in world units (mm).
-// These should roughly match the HTML rendered size at default zoom.
-// Width ~140px ≈ 37mm, height varies; use fixed estimates per class.
+// Class box connector positions — computed from the same constants used in UMLClassBox
+// so connectors sit exactly on the visual border at any zoom.
+// halfH = (headerH + attrsH + methodsH) / 2, halfW fixed wide enough for longest text.
 const CLASS_BOX_DIMS: Record<string, { halfW: number; halfH: number }> = {
-  User:          { halfW: 18, halfH: 14 },
-  Order:         { halfW: 18, halfH: 16 },
-  OrderItem:     { halfW: 16, halfH: 11 },
-  Product:       { halfW: 16, halfH: 13 },
-  PaymentMethod: { halfW: 20, halfH: 11 },
-  CreditCard:    { halfW: 16, halfH: 11 },
+  // User: header=13, attrs(4)=34, methods(2)=20 → total=67
+  User:          { halfW: 46, halfH: 34 },
+  // Order: header=13, attrs(3)=27, methods(3)=27 → total=67
+  Order:         { halfW: 46, halfH: 34 },
+  // OrderItem: header=13, attrs(2)=20, methods(1)=13 → total=46
+  OrderItem:     { halfW: 46, halfH: 23 },
+  // Product: header=13, attrs(4)=34, methods(1)=13 → total=60
+  Product:       { halfW: 40, halfH: 30 },
+  // PaymentMethod (stereotype): header=20, attrs(0)=13, methods(2)=20 → total=53
+  PaymentMethod: { halfW: 46, halfH: 27 },
+  // CreditCard: header=13, attrs(2)=20, methods(2)=20 → total=53
+  CreditCard:    { halfW: 40, halfH: 27 },
 };
 
 function computeConnectors(id: string) {
@@ -179,7 +223,7 @@ export default function UMLDiagramApp() {
   const { viewportConfig, containerRef, containerProps, isPanning } = useSolmuViewport({
     origin: 'top-left' as const,
     units: 'mm' as const,
-    worldBounds: { x: -200, y: -200, width: 400, height: 400 },
+    worldBounds: { x: -250, y: -200, width: 600, height: 500 },
     zoom: 1,
     pan: { x: 0, y: 0 },
     grid: {
@@ -191,12 +235,12 @@ export default function UMLDiagramApp() {
 
   const [data, setData] = React.useState({
     nodes: [
-      { id: "User", x: -60, y: -50, type: "uml-class", connectors: computeConnectors("User") },
-      { id: "Order", x: 20, y: -50, type: "uml-class", connectors: computeConnectors("Order") },
-      { id: "OrderItem", x: 20, y: 20, type: "uml-class", connectors: computeConnectors("OrderItem") },
-      { id: "Product", x: -60, y: 20, type: "uml-class", connectors: computeConnectors("Product") },
-      { id: "PaymentMethod", x: 90, y: -50, type: "uml-class", connectors: computeConnectors("PaymentMethod") },
-      { id: "CreditCard", x: 90, y: 20, type: "uml-class", connectors: computeConnectors("CreditCard") },
+      { id: "User", x: -120, y: -90, type: "uml-class", connectors: computeConnectors("User") },
+      { id: "Order", x: 30, y: -90, type: "uml-class", connectors: computeConnectors("Order") },
+      { id: "OrderItem", x: 30, y: 50, type: "uml-class", connectors: computeConnectors("OrderItem") },
+      { id: "Product", x: -120, y: 50, type: "uml-class", connectors: computeConnectors("Product") },
+      { id: "PaymentMethod", x: 180, y: -90, type: "uml-class", connectors: computeConnectors("PaymentMethod") },
+      { id: "CreditCard", x: 180, y: 50, type: "uml-class", connectors: computeConnectors("CreditCard") },
     ],
     edges: [
       // User 1---* Order (association)

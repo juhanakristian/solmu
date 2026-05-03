@@ -16,47 +16,48 @@ const COLORS = {
   ioStroke: "#6a1b9a",
 };
 
+// All sizes are in world units (CSS px inside the matrix-transformed layer = world units).
 const NODE_STYLE: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   cursor: "grab",
   userSelect: "none",
-  fontSize: 9,
+  fontSize: 3.5,
   fontFamily: "sans-serif",
   textAlign: "center",
   lineHeight: 1.3,
 };
 
-// Start / End (rounded rectangle)
+// Start / End (rounded rectangle) — 28×10 world units
 function Terminal({ node, onMouseDown, onMouseUp }: any) {
   const label = NODE_LABELS[node.id] || node.id;
   return (
     <div
       onMouseDown={onMouseDown} onMouseUp={onMouseUp}
-      style={{ ...NODE_STYLE, width: 56, height: 20, background: COLORS.terminal, border: `0.5px solid ${COLORS.terminalStroke}`, borderRadius: 10, color: COLORS.text }}
+      style={{ ...NODE_STYLE, width: 28, height: 10, background: COLORS.terminal, border: `0.3px solid ${COLORS.terminalStroke}`, borderRadius: 5, color: COLORS.text }}
     >
       {label}
     </div>
   );
 }
 
-// Process (rectangle)
+// Process (rectangle) — 32×12 world units
 function Process({ node, onMouseDown, onMouseUp }: any) {
   const label = NODE_LABELS[node.id] || node.id;
   return (
     <div
       onMouseDown={onMouseDown} onMouseUp={onMouseUp}
-      style={{ ...NODE_STYLE, width: 64, height: 24, background: COLORS.fill, border: `0.5px solid ${COLORS.stroke}`, borderRadius: 2, color: COLORS.text, whiteSpace: "pre-line" }}
+      style={{ ...NODE_STYLE, width: 32, height: 12, background: COLORS.fill, border: `0.3px solid ${COLORS.stroke}`, borderRadius: 1, color: COLORS.text, whiteSpace: "pre-line" }}
     >
       {label}
     </div>
   );
 }
 
-// Decision (diamond) — inline SVG with label overlay
+// Decision (diamond) — 20×20 world units, inline SVG
 function Decision({ node, onMouseDown, onMouseUp }: any) {
-  const s = 20; // pixels (= 10 world units at default zoom)
+  const s = 10; // half-size in world units → outer div 20×20
   const label = NODE_LABELS[node.id] || node.id;
   return (
     <div onMouseDown={onMouseDown} onMouseUp={onMouseUp} style={{ position: "relative", width: s * 2, height: s * 2, cursor: "grab" }}>
@@ -65,20 +66,20 @@ function Decision({ node, onMouseDown, onMouseUp }: any) {
           d={`M ${s} 0 L ${s * 2} ${s} L ${s} ${s * 2} L 0 ${s} Z`}
           fill={COLORS.decision}
           stroke={COLORS.decisionStroke}
-          strokeWidth={0.5}
+          strokeWidth={0.3}
           strokeLinejoin="round"
         />
       </svg>
-      <div style={{ ...NODE_STYLE, position: "absolute", inset: 0, fontSize: 8, color: COLORS.text }}>
+      <div style={{ ...NODE_STYLE, position: "absolute", inset: 0, fontSize: 3, color: COLORS.text }}>
         {label}
       </div>
     </div>
   );
 }
 
-// I/O (parallelogram) — inline SVG with label overlay
+// I/O (parallelogram) — 30×10 world units, inline SVG
 function IOBlock({ node, onMouseDown, onMouseUp }: any) {
-  const w = 60; const h = 20; const skew = 8;
+  const w = 30; const h = 10; const skew = 4;
   const label = NODE_LABELS[node.id] || node.id;
   return (
     <div onMouseDown={onMouseDown} onMouseUp={onMouseUp} style={{ position: "relative", width: w, height: h, cursor: "grab" }}>
@@ -87,7 +88,7 @@ function IOBlock({ node, onMouseDown, onMouseUp }: any) {
           d={`M ${skew} 0 L ${w} 0 L ${w - skew} ${h} L 0 ${h} Z`}
           fill={COLORS.io}
           stroke={COLORS.ioStroke}
-          strokeWidth={0.5}
+          strokeWidth={0.3}
           strokeLinejoin="round"
         />
       </svg>

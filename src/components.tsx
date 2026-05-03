@@ -236,8 +236,16 @@ export function SolmuCanvas({
         {children}
       </svg>
 
-      {/* HTML node layer */}
-      <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+      {/* HTML node layer — matrix maps world units to screen pixels so CSS px = world units inside */}
+      <div style={{
+        position: "absolute",
+        left: 0,
+        top: 0,
+        transformOrigin: "0 0",
+        transform: canvas.htmlLayerTransform,
+        pointerEvents: "none",
+        overflow: "visible",
+      }}>
         {elements.nodes.map((node) => {
           const NodeComponent = node.renderer;
           return (
@@ -247,10 +255,8 @@ export function SolmuCanvas({
                 position: "absolute",
                 left: 0,
                 top: 0,
-                transform: `translate(${node.screenX}px, ${node.screenY}px) translate(-50%, -50%)${node.rotation ? ` rotate(${node.rotation}deg)` : ""}`,
+                transform: `translate(${node.x}px, ${node.y}px) translate(-50%, -50%)${node.rotation ? ` rotate(${node.rotation}deg)` : ""}`,
                 pointerEvents: "auto",
-                outline: node.isSelected ? "2px dashed rgba(100,149,237,0.8)" : undefined,
-                outlineOffset: "2px",
               }}
             >
               <NodeComponent {...node.nodeProps} />

@@ -64,58 +64,75 @@ export class SolmuViewport {
     this.#config = { ...this.#config, ...updates };
   }
 
-  // Convert screen coordinates to world coordinates
-  screenToWorld(screenX: number, screenY: number): Point2D {
-    const { width, height, worldBounds, zoom, pan, origin } = this.#config;
+  // Compute the uniform-scale view transform that matches SVG's xMidYMid meet behavior.
+  // Returns the viewBox origin (viewX, viewY), uniform scale, and screen offsets.
+  #viewTransform() {
+    const { width, height, worldBounds, zoom, pan } = this.#config;
+    const viewWidth = worldBounds.width / zoom;
+    const viewHeight = worldBounds.height / zoom;
+    const centerX = worldBounds.x + worldBounds.width / 2 + pan.x * worldBounds.width;
+    const centerY = worldBounds.y + worldBounds.height / 2 + pan.y * worldBounds.height;
+    const viewX = centerX - viewWidth / 2;
+    const viewY = centerY - viewHeight / 2;
+    const scale = Math.min(width / viewWidth, height / viewHeight);
+    const offsetX = (width - viewWidth * scale) / 2;
+    const offsetY = (height - viewHeight * scale) / 2;
 
-    // Normalize screen coordinates (0-1)
-    const normalizedX = screenX / width;
-    const normalizedY = screenY / height;
+    return { viewX, viewY, scale, offsetX, offsetY };
+  }
 
-    // Apply zoom and pan
-    const zoomedX = (normalizedX - 0.5) / zoom + 0.5 + pan.x;
-    const zoomedY = (normalizedY - 0.5) / zoom + 0.5 + pan.y;
+  // Compute the view transform with proper aspect ratio handling
+  #computeViewTransform(): {
+    viewX: number;
+    viewY: number;
+    scale: number;
+    offsetX: number;
+    offsetY: number;
+  } {
+    const { width, height, worldBounds, zoom, pan } = this.#config;
+    const screenAspectRatio = width / height;
+    const worldAspectRatio = worldBounds.width / worldBounds.height;
 
-    // Convert to world coordinates
-    let worldX = worldBounds.x + zoomedX * worldBounds.width;
-    let worldY = worldBounds.y + zoomedY * worldBounds.height;
+    let viewWidth, viewHeight;
 
-    // Handle different coordinate origins
-    if (origin === "bottom-left") {
-      worldY =
-        worldBounds.y + worldBounds.height - zoomedY * worldBounds.height;
-    } else if (origin === "center") {
-      worldX = worldBounds.x + (zoomedX - 0.5) * worldBounds.width;
-      worldY = worldBounds.y + (0.5 - zoomedY) * worldBounds.height;
+    if (screenAspectRatio > worldAspectRatio) {
+      // Screen is wider - fit to height
+      viewHeight = worldBounds.height / zoom;
+      viewWidth = viewHeight * screenAspectRatio;
+    } else {
+      // Screen is taller - fit to width
+      viewWidth = worldBounds.width / zoom;
+      viewHeight = viewWidth / screenAspectRatio;
     }
 
-    return { x: worldX, y: worldY };
+    const centerX = worldBounds.x + worldBounds.width / 2 + pan.x * worldBounds.width;
+    const centerY = worldBounds.y + worldBounds.height / 2 + pan.y * worldBounds.height;
+    const viewX = centerX - viewWidth / 2;
+    const viewY = centerY - viewHeight / 2;
+
+    const scale = Math.min(width / viewWidth, height / viewHeight);
+    const offsetX = (width - viewWidth * scale) / 2;
+    const offsetY = (height - viewHeight * scale) / 2;
+
+    return { viewX, viewY, scale, offsetX, offsetY };
+  }
+
+  // Convert screen coordinates to world coordinates
+  screenToWorld(screenX: number, screenY: number): Point2D {
+    const { viewX, viewY, scale, offsetX, offsetY } = this.#computeViewTransform();
+    return {
+      x: (screenX - offsetX) / scale + viewX,
+      y: (screenY - offsetY) / scale + viewY,
+    };
   }
 
   // Convert world coordinates to screen coordinates
   worldToScreen(worldX: number, worldY: number): Point2D {
-    const { width, height, worldBounds, zoom, pan, origin } = this.#config;
-
-    let normalizedX = (worldX - worldBounds.x) / worldBounds.width;
-    let normalizedY = (worldY - worldBounds.y) / worldBounds.height;
-
-    // Handle different coordinate origins
-    if (origin === "bottom-left") {
-      normalizedY = 1 - normalizedY;
-    } else if (origin === "center") {
-      normalizedX = normalizedX + 0.5;
-      normalizedY = 0.5 - normalizedY;
-    }
-
-    // Apply zoom and pan (inverse)
-    const zoomedX = (normalizedX - 0.5 - pan.x) * zoom + 0.5;
-    const zoomedY = (normalizedY - 0.5 - pan.y) * zoom + 0.5;
-
-    // Convert to screen coordinates
-    const screenX = zoomedX * width;
-    const screenY = zoomedY * height;
-
-    return { x: screenX, y: screenY };
+    const { viewX, viewY, scale, offsetX, offsetY } = this.#computeViewTransform();
+    return {
+      x: (worldX - viewX) * scale + offsetX,
+      y: (worldY - viewY) * scale + offsetY,
+    };
   }
 
   // Get current effective grid size based on zoom
@@ -222,21 +239,68 @@ export class SolmuViewport {
     return { ...this.#config };
   }
 
+  // CSS matrix transform that maps world coordinates to screen pixels.
+  // Apply this to the HTML node layer wrapper so that CSS px inside the
+  // layer equals world units — connectors and HTML nodes then share a
+  // coordinate system and stay aligned at any zoom/pan.
+  getHTMLLayerTransform(): string {
+    const { width, height, worldBounds, zoom, pan } = this.#config;
+
+    // Calculate visible world area matching getViewBox() logic
+    const screenAspectRatio = width / height;
+    const worldAspectRatio = worldBounds.width / worldBounds.height;
+
+    let viewWidth, viewHeight;
+
+    if (screenAspectRatio > worldAspectRatio) {
+      // Screen is wider - fit to height
+      viewHeight = worldBounds.height / zoom;
+      viewWidth = viewHeight * screenAspectRatio;
+    } else {
+      // Screen is taller - fit to width
+      viewWidth = worldBounds.width / zoom;
+      viewHeight = viewWidth / screenAspectRatio;
+    }
+
+    const centerX = worldBounds.x + worldBounds.width / 2 + pan.x * worldBounds.width;
+    const centerY = worldBounds.y + worldBounds.height / 2 + pan.y * worldBounds.height;
+    const viewX = centerX - viewWidth / 2;
+    const viewY = centerY - viewHeight / 2;
+
+    const scale = Math.min(width / viewWidth, height / viewHeight);
+    const offsetX = (width - viewWidth * scale) / 2;
+    const offsetY = (height - viewHeight * scale) / 2;
+
+    const e = -viewX * scale + offsetX;
+    const f = -viewY * scale + offsetY;
+    return `matrix(${scale}, 0, 0, ${scale}, ${e}, ${f})`;
+  }
+
   // Generate SVG viewBox string with zoom and pan applied
+  // Uses same aspect ratio logic as HTML layer transform for alignment
   getViewBox(): string {
-    const { worldBounds, zoom, pan } = this.#config;
+    const { width, height, worldBounds, zoom, pan } = this.#config;
 
-    // Calculate visible world area based on zoom and pan
-    const viewWidth = worldBounds.width / zoom;
-    const viewHeight = worldBounds.height / zoom;
+    const screenAspectRatio = width / height;
+    const worldAspectRatio = worldBounds.width / worldBounds.height;
 
-    // Calculate center point with pan offset
+    let viewWidth, viewHeight;
+
+    if (screenAspectRatio > worldAspectRatio) {
+      // Screen is wider - fit to height
+      viewHeight = worldBounds.height / zoom;
+      viewWidth = viewHeight * screenAspectRatio;
+    } else {
+      // Screen is taller - fit to width
+      viewWidth = worldBounds.width / zoom;
+      viewHeight = viewWidth / screenAspectRatio;
+    }
+
     const centerX =
       worldBounds.x + worldBounds.width / 2 + pan.x * worldBounds.width;
     const centerY =
       worldBounds.y + worldBounds.height / 2 + pan.y * worldBounds.height;
 
-    // Calculate viewBox bounds
     const viewX = centerX - viewWidth / 2;
     const viewY = centerY - viewHeight / 2;
 
